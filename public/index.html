@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>S3 File Viewer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ===== HEADER ===== -->
+  <header class="header">
+    <h1 class="header-title">S3 File Viewer</h1>
+    <button id="btn-manage-sources" class="btn btn-secondary">⚙ Manage Sources</button>
+  </header>
+
+  <!-- ===== TOOLBAR ===== -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button id="btn-fetch-all" class="btn btn-primary">⬇ Fetch All</button>
+      <label class="toolbar-label">Sort:
+        <select id="select-sort" class="select-control">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="folder">Folder</option>
+          <option value="path">Path A–Z</option>
+          <option value="largest">Largest first</option>
+          <option value="smallest">Smallest first</option>
+        </select>
+      </label>
+      <span class="toolbar-label">View:
+        <label class="radio-label"><input type="radio" name="view-mode" value="all" checked /> All</label>
+        <label class="radio-label"><input type="radio" name="view-mode" value="by-source" /> By Source</label>
+      </span>
+    </div>
+    <div class="toolbar-right">
+      <span id="last-fetch-label" class="muted-text">Not fetched yet</span>
+    </div>
+  </div>
+
+  <!-- ===== SOURCE FILTER (All view only) ===== -->
+  <div id="source-filter" class="source-filter hidden"></div>
+
+  <!-- ===== STATS BAR ===== -->
+  <div id="stats-bar" class="stats-bar hidden">
+    <span id="stat-total"></span>
+    <span id="stat-new"></span>
+    <span id="stat-sources"></span>
+  </div>
+
+  <!-- ===== ERROR BANNER ===== -->
+  <div id="error-banner" class="error-banner hidden"></div>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main id="main-content">
+    <div class="empty-state">Add sources via ⚙ Manage Sources, then click ⬇ Fetch All.</div>
+  </main>
+
+  <!-- ===== MANAGE SOURCES MODAL ===== -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Manage Sources</h2>
+        <button id="btn-close-modal" class="btn-icon" aria-label="Close">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Add form -->
+        <div class="add-source-form">
+          <input id="input-label" type="text" placeholder="Label (e.g. Documents)" class="input-control" />
+          <input id="input-url" type="url" placeholder="S3 Bucket URL (https://...)" class="input-control input-url" />
+          <button id="btn-add-source" class="btn btn-primary">Add</button>
+        </div>
+        <div id="add-source-error" class="form-error hidden"></div>
+
+        <!-- Sources list -->
+        <div id="sources-list" class="sources-list">
+          <div class="muted-text">Loading sources…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
