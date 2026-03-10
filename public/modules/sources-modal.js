@@ -2,7 +2,7 @@
 
 import { state } from './state.js';
 import { apiAddSource, apiUpdateSource, apiDeleteSource } from './api.js';
-import { renderSourceFilter } from './render-ui.js';
+import { renderSourceDropdown } from './render-ui.js';
 import { escHtml } from './utils.js';
 
 export function openModal() {
@@ -84,7 +84,7 @@ function startEditSource(src) {
       const idx = state.sources.findIndex(s => s.id === src.id);
       if (idx >= 0) state.sources[idx] = updated;
       renderSourcesList();
-      renderSourceFilter();
+      renderSourceDropdown();
     } catch (err) {
       errEl.textContent = err.message; errEl.classList.remove('hidden');
     }
@@ -99,7 +99,7 @@ async function deleteSource(id) {
     state.sources = state.sources.filter(s => s.id !== id);
     state.activeSourceIds.delete(id);
     renderSourcesList();
-    renderSourceFilter();
+    renderSourceDropdown();
   } catch (err) {
     alert('Delete failed: ' + err.message);
   }
@@ -118,7 +118,7 @@ export async function addSource() {
     state.activeSourceIds.add(newSrc.id);
     clearAddForm();
     renderSourcesList();
-    renderSourceFilter();
+    renderSourceDropdown();
   } catch (err) {
     showAddError(err.message);
   }

@@ -3,7 +3,8 @@
 import { state } from './state.js';
 import { apiFetchSources, apiProxyFetch, apiGetSeen, apiSaveSeen } from './api.js';
 import { parseS3Xml } from './parse.js';
-import { renderFileList, renderStats, renderSourceFilter } from './render-ui.js';
+import { isNewFile } from './sort-filter.js';
+import { renderFileList, renderStats, renderSourceDropdown, renderTagFilter } from './render-ui.js';
 import { escHtml, formatDate } from './utils.js';
 
 export async function fetchAll() {
@@ -59,16 +60,14 @@ export async function fetchAll() {
       }
     }
 
-    // 4. Detect new files (not in seenMap) and set firstSeen
+    // 4. Set firstSeen from seenMap (or now if new), compute isNew from 24h window
     const newFileEntries = [];
     for (const f of allFiles) {
       const seenKey = `${f.sourceUrl}::${f.key}`;
       if (seenMap[seenKey]) {
         f.firstSeen = seenMap[seenKey].firstSeen;
-        f.isNew = false;
       } else {
         f.firstSeen = nowIso;
-        f.isNew = true;
         newFileEntries.push({
           key: seenKey,
           sourceUrl: f.sourceUrl,
@@ -77,6 +76,8 @@ export async function fetchAll() {
           lastModified: f.lastModified?.toISOString() || null,
         });
       }
+      f.isNew = isNewFile(f.firstSeen);
+      f.tags = f.tags || [];
     }
 
     // 5. Persist newly discovered files
@@ -91,7 +92,8 @@ export async function fetchAll() {
     // 6. Render
     renderFileList();
     renderStats();
-    renderSourceFilter();
+    renderSourceDropdown();
+    renderTagFilter();
 
     // 7. Show per-source errors if any
     const errorEntries = Object.entries(state.fetchErrors);

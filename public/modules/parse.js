@@ -1,4 +1,6 @@
-// S3 XML parsing utilities
+// S3 XML parsing utilities + DB row → file object conversion
+
+import { isNewFile } from './sort-filter.js';
 
 const S3_NS = 'http://s3.amazonaws.com/doc/2006-03-01/';
 
@@ -13,6 +15,24 @@ function getEl(parent, tag) {
 export function extractDisplayName(key) {
   const filename = key.split('/').pop();
   return filename.replace(/^\d+-/, '');
+}
+
+// Convert a DB row from /api/files into a file object
+export function dbRowToFile(row) {
+  return {
+    key: row.key,
+    displayName: extractDisplayName(row.key),
+    folder: row.key.includes('/') ? row.key.substring(0, row.key.lastIndexOf('/')) : '',
+    url: row.source_url + row.key,
+    sourceUrl: row.source_url,
+    sourceLabel: row.source_label || '(deleted source)',
+    sourceId: row.source_id,
+    size: row.size || 0,
+    lastModified: row.last_modified ? new Date(row.last_modified) : null,
+    firstSeen: row.first_seen,
+    isNew: isNewFile(row.first_seen),
+    tags: row.tags || [],
+  };
 }
 
 export function parseS3Xml(xmlText, source) {

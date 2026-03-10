@@ -45,6 +45,12 @@ export async function apiProxyFetch(url) {
   return res.text();
 }
 
+export async function apiGetFiles() {
+  const res = await fetch('/api/files');
+  if (!res.ok) throw new Error('Failed to load files');
+  return res.json();
+}
+
 export async function apiGetSeen() {
   const res = await fetch('/api/seen');
   if (!res.ok) throw new Error('Failed to load seen files');

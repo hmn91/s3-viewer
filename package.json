@@ -1,0 +1,14 @@
+{
+  "name": "s3-viewer",
+  "version": "1.0.0",
+  "description": "Localhost web app to view files from S3 public bucket URLs",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning server.js",
+    "dev": "node --no-warnings=ExperimentalWarning --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.3"
+  }
+}
