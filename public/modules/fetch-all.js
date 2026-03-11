@@ -61,9 +61,11 @@ export async function fetchAll() {
     }
 
     // 4. Set firstSeen from seenMap (or now if new), compute isNew from 24h window
+    // Use composite key (sourceUrl::s3Key) as canonical file identifier so tag assignments match DB
     const newFileEntries = [];
     for (const f of allFiles) {
       const seenKey = `${f.sourceUrl}::${f.key}`;
+      f.key = seenKey; // promote to composite key — must match seen_files.key in DB
       if (seenMap[seenKey]) {
         f.firstSeen = seenMap[seenKey].firstSeen;
       } else {

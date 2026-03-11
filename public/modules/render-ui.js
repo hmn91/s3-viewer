@@ -110,15 +110,13 @@ export function renderSourceDropdown() {
     item.querySelector('input').addEventListener('change', e => {
       if (e.target.checked) state.activeSourceIds.add(src.id);
       else state.activeSourceIds.delete(src.id);
-      renderSourceDropdown();
-      renderFileList();
-      renderStats();
+      renderSourceDropdown(); // only update count badge, not file list
     });
     list.appendChild(item);
   }
 }
 
-// Render tag filter dropdown list items + update count badge
+// Render tag filter dropdown — mirrors source dropdown (search, select/deselect all, apply)
 export function renderTagFilter() {
   const dropdown = document.getElementById('tag-filter-dropdown');
   if (!dropdown) return;
@@ -129,12 +127,17 @@ export function renderTagFilter() {
   }
   dropdown.classList.remove('hidden');
 
+  // Update button count badge
   const selected = state.tags.filter(t => state.activeTagIds.has(t.id)).length;
   document.getElementById('tag-filter-count').textContent = selected ? `(${selected})` : '';
 
+  // Filter list by tagSearch
+  const q = state.tagSearch.toLowerCase();
+  const filtered = state.tags.filter(t => t.name.toLowerCase().includes(q));
+
   const list = document.getElementById('tag-filter-list');
   list.innerHTML = '';
-  for (const tag of state.tags) {
+  for (const tag of filtered) {
     const item = document.createElement('label');
     item.className = 'source-dropdown-item';
     const checked = state.activeTagIds.has(tag.id) ? 'checked' : '';
@@ -145,9 +148,7 @@ export function renderTagFilter() {
     item.querySelector('input').addEventListener('change', e => {
       if (e.target.checked) state.activeTagIds.add(tag.id);
       else state.activeTagIds.delete(tag.id);
-      renderTagFilter();
-      renderFileList();
-      renderStats();
+      renderTagFilter(); // only update count badge, apply triggers file list render
     });
     list.appendChild(item);
   }

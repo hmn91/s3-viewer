@@ -23,7 +23,6 @@ function sortIcon(col, sortCol, sortDir) {
 export function buildFileRow(file) {
   const tr = document.createElement('tr');
   tr.className = 'file-row';
-  tr.title = file.key;
   // Only open URL when clicking the filename span, not the whole row
   // (prevents tag ＋ button and other row actions from opening the link)
 
@@ -74,11 +73,7 @@ export function buildTable(files, sortCol, sortDir) {
     if (h.key && h.key !== 'tags') th.dataset.col = h.key;
 
     if (h.key === 'displayName') {
-      // Filename column: sort icon + inline filter input below header text
-      th.innerHTML = `
-        Filename ${sortIcon('displayName', sortCol, sortDir)}
-        <input class="col-filter-input" placeholder="filter…" onclick="event.stopPropagation()" />
-      `;
+      th.innerHTML = `Filename ${sortIcon('displayName', sortCol, sortDir)}`;
     } else if (h.key && h.key !== 'tags') {
       th.innerHTML = `${h.label} ${sortIcon(h.key, sortCol, sortDir)}`;
     } else {
@@ -93,5 +88,37 @@ export function buildTable(files, sortCol, sortDir) {
   const tbody = document.createElement('tbody');
   files.forEach(f => tbody.appendChild(buildFileRow(f)));
   table.appendChild(tbody);
+
+  addResizeHandles(headerRow);
   return table;
+}
+
+function addResizeHandles(headerRow) {
+  const ths = [...headerRow.querySelectorAll('th')];
+  ths.forEach((th, i) => {
+    if (i === ths.length - 1) return; // no handle on last column
+    const handle = document.createElement('div');
+    handle.className = 'col-resize-handle';
+    th.appendChild(handle);
+
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      e.stopPropagation(); // don't trigger sort click
+      const startX = e.clientX;
+      const startW = th.offsetWidth;
+      handle.classList.add('dragging');
+
+      const onMove = mv => {
+        th.style.width = Math.max(40, startW + mv.clientX - startX) + 'px';
+        th.style.minWidth = th.style.width;
+      };
+      const onUp = () => {
+        handle.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
 }

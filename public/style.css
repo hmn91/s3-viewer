@@ -3,6 +3,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  --header-h: 49px; /* updated by JS on init */
   --bg: #f8f9fa;
   --surface: #ffffff;
   --border: #dee2e6;
@@ -81,6 +82,13 @@ body {
 .btn-icon:hover { background: var(--bg); }
 .btn-edit { background: #f0f0f0; color: var(--text); border-color: var(--border); }
 .btn-edit:hover { background: #e0e0e0; }
+
+/* ===== STICKY SUBHEADER ===== */
+.sticky-subheader {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 99;
+}
 
 /* ===== TOOLBAR ===== */
 .toolbar {
@@ -198,11 +206,8 @@ main {
 
 .file-name {
   display: block;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-weight: 500;
+  word-break: break-all;
 }
 
 /* ===== BADGES ===== */
@@ -377,23 +382,24 @@ main {
 .sort-icon { color: var(--muted); font-size: 10px; margin-left: 2px; }
 .sort-icon.active { color: var(--primary); }
 
-/* ===== FILENAME COLUMN INLINE FILTER ===== */
-.col-filter-input {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--text);
-  background: var(--surface);
-  outline: none;
+/* ===== COLUMN RESIZE HANDLE ===== */
+.file-table th { position: relative; }
+.col-resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+  z-index: 1;
 }
-.col-filter-input:focus { border-color: var(--primary); }
+.col-resize-handle:hover,
+.col-resize-handle.dragging { background: var(--primary); opacity: 0.4; }
+
+/* ===== NEW FILTER TOGGLE ===== */
+.btn-filter-new-active { background: var(--new-bg); color: var(--new-color); border-color: var(--new-color); }
+
 
 /* ===== FILENAME HOVER TOOLTIP ===== */
 .col-name { position: relative; max-width: 260px; }
@@ -409,9 +415,6 @@ main {
   padding: 4px 8px;
   border-radius: 4px;
   white-space: nowrap;
-  max-width: 600px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   z-index: 50;
   pointer-events: none;
   box-shadow: 0 2px 8px rgba(0,0,0,.3);
@@ -446,28 +449,67 @@ main {
 
 /* ===== TAG PICKER POPOVER ===== */
 .tag-picker-popover {
-  position: absolute;
+  position: fixed;
   z-index: 160;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0,0,0,.15);
-  min-width: 180px;
-  max-height: 240px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.18);
+  min-width: 220px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
-.tag-picker-list { overflow-y: auto; flex: 1; padding: 4px 0; }
+.tag-picker-search {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  font-size: 13px;
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+  flex-shrink: 0;
+}
+/* Cap body to ~5 items (36px each) + label row; mouse-wheel and arrow keys scroll */
+.tag-picker-body { overflow-y: auto; max-height: calc(5 * 36px + 24px); padding: 4px 0; }
+.tag-picker-section-label {
+  padding: 4px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
 .tag-picker-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   padding: 6px 12px;
   cursor: pointer;
   font-size: 13px;
+  user-select: none;
 }
-.tag-picker-item:hover { background: var(--bg); }
+.tag-picker-item:hover,
+.tag-picker-item:focus { background: var(--bg); outline: none; }
+.tag-picker-create-btn:focus { outline: none; background: var(--bg); }
+/* Assigned: distinct teal-ish tint so it's clearly different from plain hover */
+.tag-picker-item.assigned { background: color-mix(in srgb, var(--primary) 14%, transparent); border-left: 3px solid var(--primary); padding-left: 9px; }
+.tag-picker-item.assigned:hover,
+.tag-picker-item.assigned:focus { background: color-mix(in srgb, var(--primary) 22%, transparent); }
+.tag-picker-check { font-size: 12px; color: var(--primary); flex-shrink: 0; }
+.tag-picker-create-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--primary);
+  cursor: pointer;
+}
+.tag-picker-create-btn:hover { background: var(--bg); }
 .tag-picker-empty { padding: 10px 12px; color: var(--muted); font-size: 12px; }
 
 /* ===== TAG MANAGER MODAL ===== */

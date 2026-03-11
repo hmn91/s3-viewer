@@ -45,6 +45,13 @@ export function parseS3Xml(xmlText, source) {
   const parseErr = doc.querySelector('parsererror');
   if (parseErr) throw new Error('Invalid XML: ' + parseErr.textContent.slice(0, 120));
 
+  // Detect S3 error responses (e.g. NoSuchBucket, AccessDenied, NoSuchKey)
+  const s3ErrCode = doc.querySelector('Error > Code');
+  if (s3ErrCode) {
+    const msg = doc.querySelector('Error > Message')?.textContent || s3ErrCode.textContent;
+    throw new Error(`S3 error: ${s3ErrCode.textContent} — ${msg}`);
+  }
+
   const isTruncated = getEl(doc, 'IsTruncated')?.textContent === 'true';
   if (isTruncated) console.warn(`[${source.label}] Results truncated at 1000 files`);
 

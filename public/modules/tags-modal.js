@@ -2,7 +2,7 @@
 
 import { state } from './state.js';
 import { apiCreateTag, apiUpdateTag, apiDeleteTag } from './api-tags.js';
-import { renderTagFilter } from './render-ui.js';
+import { renderTagFilter, renderFileList } from './render-ui.js';
 import { escHtml } from './utils.js';
 
 const PRESET_COLORS = [
@@ -119,6 +119,7 @@ function startEdit(row, tag) {
       });
       renderTagList();
       renderTagFilter();
+      renderFileList(); // refresh tag badges in file rows
     } catch (err) {
       showError(err.message);
     }
@@ -140,6 +141,7 @@ async function deleteTag(tag, usageCount) {
     });
     renderTagList();
     renderTagFilter();
+    renderFileList(); // refresh tag badges + remove deleted tag from file rows
   } catch (err) {
     showError(err.message);
   }

@@ -58,20 +58,18 @@ function bindEvents() {
     const q = state.sourceSearch.toLowerCase();
     state.sources.filter(s => s.label.toLowerCase().includes(q)).forEach(s => state.activeSourceIds.add(s.id));
     renderSourceDropdown();
-    renderFileList();
-    renderStats();
   });
   document.getElementById('btn-deselect-all-sources').addEventListener('click', () => {
     const q = state.sourceSearch.toLowerCase();
     state.sources.filter(s => s.label.toLowerCase().includes(q)).forEach(s => state.activeSourceIds.delete(s.id));
     renderSourceDropdown();
-    renderFileList();
-    renderStats();
   });
 
-  // Source dropdown: Apply button closes the panel
+  // Source dropdown: Apply button applies filter + closes panel
   document.getElementById('btn-apply-source-filter').addEventListener('click', () => {
     document.getElementById('source-dropdown-panel').classList.add('hidden');
+    renderFileList();
+    renderStats();
   });
 
   // Tag filter dropdown: toggle panel
@@ -84,9 +82,43 @@ function bindEvents() {
   // Prevent clicks inside tag filter panel from closing it
   document.getElementById('tag-filter-panel').addEventListener('click', e => e.stopPropagation());
 
+  // Tag filter: search input
+  document.getElementById('tag-search-input').addEventListener('input', e => {
+    state.tagSearch = e.target.value;
+    renderTagFilter();
+  });
+
+  // Tag filter: select/deselect all (filtered)
+  document.getElementById('btn-select-all-tags').addEventListener('click', () => {
+    const q = state.tagSearch.toLowerCase();
+    state.tags.filter(t => t.name.toLowerCase().includes(q)).forEach(t => state.activeTagIds.add(t.id));
+    renderTagFilter();
+  });
+  document.getElementById('btn-deselect-all-tags').addEventListener('click', () => {
+    const q = state.tagSearch.toLowerCase();
+    state.tags.filter(t => t.name.toLowerCase().includes(q)).forEach(t => state.activeTagIds.delete(t.id));
+    renderTagFilter();
+  });
+
+  // Tag filter: Apply button applies filter + closes panel
+  document.getElementById('btn-apply-tag-filter').addEventListener('click', () => {
+    document.getElementById('tag-filter-panel').classList.add('hidden');
+    renderFileList();
+    renderStats();
+  });
+
   // Global filename search
   document.getElementById('global-search').addEventListener('input', e => {
     state.searchQuery = e.target.value;
+    renderFileList();
+    renderStats();
+  });
+
+  // NEW-only filter toggle
+  document.getElementById('btn-filter-new').addEventListener('click', () => {
+    state.filterNew = !state.filterNew;
+    const btn = document.getElementById('btn-filter-new');
+    btn.classList.toggle('btn-filter-new-active', state.filterNew);
     renderFileList();
     renderStats();
   });
@@ -101,7 +133,7 @@ function bindEvents() {
   // Column sort — event delegation on main-content (re-rendered on each update)
   document.getElementById('main-content').addEventListener('click', e => {
     const th = e.target.closest('th.sortable');
-    if (!th || e.target.closest('.col-filter-input')) return;
+    if (!th) return;
     const col = th.dataset.col;
     if (state.sortCol !== col) {
       state.sortCol = col;
@@ -113,21 +145,6 @@ function bindEvents() {
       state.sortDir = null;
     }
     renderFileList();
-  });
-
-  // Filename inline filter — restore value + focus after re-render (DOM is replaced)
-  document.getElementById('main-content').addEventListener('input', e => {
-    const input = e.target.closest('.col-filter-input');
-    if (!input) return;
-    state.filenameFilter = input.value;
-    renderFileList();
-    renderStats();
-    // Re-render rebuilds the DOM; restore value and refocus the new input
-    const newInput = document.querySelector('.col-filter-input');
-    if (newInput) {
-      newInput.value = state.filenameFilter;
-      newInput.focus();
-    }
   });
 
   // Tag inline picker — event delegation on ＋ buttons in file rows
@@ -158,6 +175,12 @@ function bindEvents() {
 
 async function init() {
   bindEvents();
+
+  // Set --header-h CSS variable so sticky-subheader positions exactly below header
+  const headerEl = document.querySelector('.header');
+  if (headerEl) {
+    document.documentElement.style.setProperty('--header-h', headerEl.offsetHeight + 'px');
+  }
 
   // Restore last fetch timestamp from localStorage
   const lastFetch = localStorage.getItem('lastFetch');

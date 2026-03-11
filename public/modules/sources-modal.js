@@ -1,7 +1,8 @@
 // Manage Sources modal: open/close, add/edit/delete sources
 
 import { state } from './state.js';
-import { apiAddSource, apiUpdateSource, apiDeleteSource } from './api.js';
+import { apiAddSource, apiUpdateSource, apiDeleteSource, apiProxyFetch } from './api.js';
+import { parseS3Xml } from './parse.js';
 import { renderSourceDropdown } from './render-ui.js';
 import { escHtml } from './utils.js';
 
@@ -112,6 +113,22 @@ export async function addSource() {
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     showAddError('URL must start with http:// or https://'); return;
   }
+
+  // Validate: fetch + parse the S3 XML before saving
+  const btn = document.getElementById('btn-add-source');
+  btn.disabled = true;
+  btn.textContent = 'Validating…';
+  showAddError('');
+  try {
+    const xmlText = await apiProxyFetch(url);
+    parseS3Xml(xmlText, { label, url }); // throws on invalid XML / non-S3 response
+  } catch (err) {
+    showAddError('Connection failed: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = 'Add';
+    return;
+  }
+
   try {
     const newSrc = await apiAddSource(label, url);
     state.sources.push(newSrc);
@@ -121,5 +138,8 @@ export async function addSource() {
     renderSourceDropdown();
   } catch (err) {
     showAddError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Add';
   }
 }

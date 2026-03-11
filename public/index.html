@@ -16,10 +16,14 @@
     </div>
   </header>
 
+  <!-- ===== STICKY SUBHEADER: toolbar + stats bar stick below fixed header ===== -->
+  <div class="sticky-subheader">
+
   <!-- ===== TOOLBAR ===== -->
   <div class="toolbar">
     <div class="toolbar-left">
       <button id="btn-fetch-all" class="btn btn-primary">⬇ Fetch All</button>
+      <button id="btn-filter-new" class="btn btn-secondary">NEW only</button>
 
       <!-- Source multi-select dropdown (Excel-like) -->
       <div id="source-dropdown" class="source-dropdown hidden">
@@ -45,7 +49,15 @@
           Tags <span id="tag-filter-count"></span> ▼
         </button>
         <div id="tag-filter-panel" class="source-dropdown-panel hidden">
+          <input id="tag-search-input" type="text" placeholder="Filter tags…" class="source-search-input" />
+          <div class="source-dropdown-actions">
+            <button id="btn-select-all-tags" class="btn btn-sm btn-secondary">Select All</button>
+            <button id="btn-deselect-all-tags" class="btn btn-sm btn-secondary">Deselect All</button>
+          </div>
           <div id="tag-filter-list" class="source-dropdown-list"></div>
+          <div class="source-dropdown-footer">
+            <button id="btn-apply-tag-filter" class="btn btn-sm btn-primary">Apply</button>
+          </div>
         </div>
       </div>
 
@@ -66,6 +78,8 @@
     <span id="stat-new"></span>
     <span id="stat-sources"></span>
   </div>
+
+  </div><!-- end .sticky-subheader -->
 
   <!-- ===== ERROR BANNER ===== -->
   <div id="error-banner" class="error-banner hidden"></div>
