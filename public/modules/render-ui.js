@@ -47,7 +47,8 @@ export function renderFileList() {
     `;
     const body = document.createElement('div');
     body.className = 'source-group-body';
-    body.appendChild(buildTable(files, state.sortCol, state.sortDir));
+    // By-source view: no sortable headers (sort is per-group visual, not global)
+    body.appendChild(buildTable(files, null, null));
 
     header.addEventListener('click', () => {
       const collapsed = body.classList.toggle('collapsed');
@@ -72,7 +73,10 @@ export function renderStats() {
   for (const f of visible) sourceCounts[f.sourceLabel] = (sourceCounts[f.sourceLabel] || 0) + 1;
   const sourceText = Object.entries(sourceCounts).map(([l, c]) => `${escHtml(l)}: ${c}`).join(' | ');
 
-  document.getElementById('stat-total').textContent = `Total: ${visible.length} files`;
+  const total = state.allFiles.length;
+  const showing = visible.length;
+  document.getElementById('stat-total').textContent =
+    showing < total ? `Showing: ${showing} / ${total} files` : `Total: ${total} files`;
   document.getElementById('stat-new').innerHTML = newCount ? `<span class="text-new">${newCount} NEW</span>` : '0 new';
   document.getElementById('stat-sources').innerHTML = sourceText;
 }

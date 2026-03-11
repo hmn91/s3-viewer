@@ -182,8 +182,10 @@ main {
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
-.file-row { cursor: pointer; transition: background 0.1s; }
+.file-row { transition: background 0.1s; }
 .file-row:hover { background: #f0f4ff; }
+.file-name-link { cursor: pointer; }
+.file-name-link:hover { color: var(--primary); text-decoration: underline; }
 
 /* Column widths */
 .col-new { width: 52px; text-align: center; }
@@ -355,6 +357,7 @@ main {
 }
 .source-dropdown-actions { display: flex; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .source-dropdown-list { overflow-y: auto; flex: 1; padding: 4px 0; }
+.source-dropdown-footer { padding: 6px 8px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
 .source-dropdown-item {
   display: flex;
   align-items: center;

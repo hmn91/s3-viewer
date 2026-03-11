@@ -18,12 +18,15 @@ export function extractDisplayName(key) {
 }
 
 // Convert a DB row from /api/files into a file object
+// seen_files.key format is "sourceUrl::s3Key" — extract just the s3Key part
 export function dbRowToFile(row) {
+  const colonIdx = row.key.indexOf('::');
+  const s3Key = colonIdx !== -1 ? row.key.substring(colonIdx + 2) : row.key;
   return {
     key: row.key,
-    displayName: extractDisplayName(row.key),
-    folder: row.key.includes('/') ? row.key.substring(0, row.key.lastIndexOf('/')) : '',
-    url: row.source_url + row.key,
+    displayName: extractDisplayName(s3Key),
+    folder: s3Key.includes('/') ? s3Key.substring(0, s3Key.lastIndexOf('/')) : '',
+    url: row.source_url + s3Key,
     sourceUrl: row.source_url,
     sourceLabel: row.source_label || '(deleted source)',
     sourceId: row.source_id,

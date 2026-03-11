@@ -44,6 +44,9 @@ function bindEvents() {
     document.getElementById('tag-filter-panel').classList.add('hidden');
   });
 
+  // Prevent clicks inside source panel from closing it (fixes filter input + Select All)
+  document.getElementById('source-dropdown-panel').addEventListener('click', e => e.stopPropagation());
+
   // Source dropdown: search input
   document.getElementById('source-search-input').addEventListener('input', e => {
     state.sourceSearch = e.target.value;
@@ -53,19 +56,22 @@ function bindEvents() {
   // Source dropdown: select/deselect all
   document.getElementById('btn-select-all-sources').addEventListener('click', () => {
     const q = state.sourceSearch.toLowerCase();
-    const filtered = state.sources.filter(s => s.label.toLowerCase().includes(q));
-    filtered.forEach(s => state.activeSourceIds.add(s.id));
+    state.sources.filter(s => s.label.toLowerCase().includes(q)).forEach(s => state.activeSourceIds.add(s.id));
     renderSourceDropdown();
     renderFileList();
     renderStats();
   });
   document.getElementById('btn-deselect-all-sources').addEventListener('click', () => {
     const q = state.sourceSearch.toLowerCase();
-    const filtered = state.sources.filter(s => s.label.toLowerCase().includes(q));
-    filtered.forEach(s => state.activeSourceIds.delete(s.id));
+    state.sources.filter(s => s.label.toLowerCase().includes(q)).forEach(s => state.activeSourceIds.delete(s.id));
     renderSourceDropdown();
     renderFileList();
     renderStats();
+  });
+
+  // Source dropdown: Apply button closes the panel
+  document.getElementById('btn-apply-source-filter').addEventListener('click', () => {
+    document.getElementById('source-dropdown-panel').classList.add('hidden');
   });
 
   // Tag filter dropdown: toggle panel
@@ -74,6 +80,9 @@ function bindEvents() {
     document.getElementById('tag-filter-panel').classList.toggle('hidden');
     document.getElementById('source-dropdown-panel').classList.add('hidden');
   });
+
+  // Prevent clicks inside tag filter panel from closing it
+  document.getElementById('tag-filter-panel').addEventListener('click', e => e.stopPropagation());
 
   // Global filename search
   document.getElementById('global-search').addEventListener('input', e => {
@@ -92,7 +101,6 @@ function bindEvents() {
   // Column sort — event delegation on main-content (re-rendered on each update)
   document.getElementById('main-content').addEventListener('click', e => {
     const th = e.target.closest('th.sortable');
-    // Don't trigger sort if user clicked the filter input inside the header
     if (!th || e.target.closest('.col-filter-input')) return;
     const col = th.dataset.col;
     if (state.sortCol !== col) {
@@ -107,13 +115,19 @@ function bindEvents() {
     renderFileList();
   });
 
-  // Filename inline column filter — event delegation
+  // Filename inline filter — restore value + focus after re-render (DOM is replaced)
   document.getElementById('main-content').addEventListener('input', e => {
     const input = e.target.closest('.col-filter-input');
     if (!input) return;
     state.filenameFilter = input.value;
     renderFileList();
     renderStats();
+    // Re-render rebuilds the DOM; restore value and refocus the new input
+    const newInput = document.querySelector('.col-filter-input');
+    if (newInput) {
+      newInput.value = state.filenameFilter;
+      newInput.focus();
+    }
   });
 
   // Tag inline picker — event delegation on ＋ buttons in file rows

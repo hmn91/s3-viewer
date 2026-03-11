@@ -24,7 +24,8 @@ export function buildFileRow(file) {
   const tr = document.createElement('tr');
   tr.className = 'file-row';
   tr.title = file.key;
-  tr.addEventListener('click', () => window.open(file.url, '_blank'));
+  // Only open URL when clicking the filename span, not the whole row
+  // (prevents tag ＋ button and other row actions from opening the link)
 
   const color = getSourceColor(file.sourceLabel);
   const tagsHtml = (file.tags || []).map(t =>
@@ -34,7 +35,7 @@ export function buildFileRow(file) {
   tr.innerHTML = `
     <td class="col-new">${file.isNew ? '<span class="badge-new">NEW</span>' : ''}</td>
     <td class="col-name">
-      <span class="file-name">${escHtml(file.displayName)}</span>
+      <span class="file-name file-name-link">${escHtml(file.displayName)}</span>
       <div class="file-path-tooltip">${escHtml(file.url)}</div>
     </td>
     <td class="col-folder mono">${escHtml(file.folder || '/')}</td>
@@ -49,6 +50,13 @@ export function buildFileRow(file) {
       </div>
     </td>
   `;
+
+  // Attach click-to-open only on the filename span (not the whole row)
+  tr.querySelector('.file-name-link').addEventListener('click', e => {
+    e.stopPropagation();
+    window.open(file.url, '_blank');
+  });
+
   return tr;
 }
 
