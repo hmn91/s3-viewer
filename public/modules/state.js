@@ -15,7 +15,10 @@ export const state = {
   tagSearch: '',       // tag filter dropdown search input
   tags: [],            // [{ id, name, color }] — all available tags
   activeTagIds: new Set(), // tag IDs selected in tag filter
+  filterNoTag: false,  // if true, include files with no tags in tag filter results
   filterNew: false,    // if true, show only NEW files
+  hiddenKeys: new Set(), // file keys that are hidden
+  showHidden: false,     // if true, show hidden files (grayed out) with unhide button
 };
 
 export function getVisibleFiles() {
@@ -27,20 +30,37 @@ export function getVisibleFiles() {
     files = files.filter(f => state.activeSourceIds.has(f.sourceId));
   }
 
-  // Global search (case-insensitive substring on displayName)
+  // Global search: filename, comment, tags (by name), url
   if (state.searchQuery) {
     const q = state.searchQuery.toLowerCase();
-    files = files.filter(f => f.displayName.toLowerCase().includes(q));
+    files = files.filter(f =>
+      f.displayName.toLowerCase().includes(q) ||
+      (f.comment && f.comment.toLowerCase().includes(q)) ||
+      (f.tags && f.tags.some(t => t.name.toLowerCase().includes(q))) ||
+      f.url.toLowerCase().includes(q)
+    );
   }
 
-  // Tag filter — OR logic: show files that have ANY of the selected tags
-  if (state.activeTagIds.size > 0) {
-    files = files.filter(f => f.tags && f.tags.some(t => state.activeTagIds.has(t.id)));
+  // Tag filter — OR logic across tags + "no tag" option
+  // Skip filter entirely when all options are selected (= show all, no filtering needed)
+  const allTagsSelected = state.filterNoTag && state.activeTagIds.size === state.tags.length;
+  if (!allTagsSelected && (state.activeTagIds.size > 0 || state.filterNoTag)) {
+    files = files.filter(f => {
+      const hasNoTags = !f.tags || f.tags.length === 0;
+      if (state.filterNoTag && hasNoTags) return true;
+      if (state.activeTagIds.size > 0 && f.tags && f.tags.some(t => state.activeTagIds.has(t.id))) return true;
+      return false;
+    });
   }
 
   // NEW filter
   if (state.filterNew) {
     files = files.filter(f => f.isNew);
+  }
+
+  // Hidden files filter: exclude hidden unless showHidden is on
+  if (!state.showHidden && state.hiddenKeys.size > 0) {
+    files = files.filter(f => !state.hiddenKeys.has(f.key));
   }
 
   return files;

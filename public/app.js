@@ -2,7 +2,7 @@
 // All logic delegated to modules/
 
 import { state } from './modules/state.js';
-import { apiFetchSources, apiGetFiles } from './modules/api.js';
+import { apiFetchSources, apiGetFiles, apiGetHiddenKeys, apiHideFile, apiUnhideFile, apiUpdateComment } from './modules/api.js';
 import { apiGetTags } from './modules/api-tags.js';
 import { apiGetProjects } from './modules/project-api.js';
 import { renderFileList, renderStats, renderSourceDropdown, renderTagFilter } from './modules/render-ui.js';
@@ -32,6 +32,7 @@ async function enterProject(project) {
   state.seenMap = {};
   state.activeSourceIds = new Set();
   state.activeTagIds = new Set();
+  state.filterNoTag = false;
   state.searchQuery = '';
   state.sourceSearch = '';
   state.tagSearch = '';
@@ -39,6 +40,8 @@ async function enterProject(project) {
   state.sortCol = null;
   state.sortDir = null;
   state.fetchErrors = {};
+  state.hiddenKeys = new Set();
+  state.showHidden = false;
 
   // Reset UI controls to match cleared state
   const searchInput = document.getElementById('global-search');
@@ -60,18 +63,25 @@ async function enterProject(project) {
 
   // Load project-scoped data
   try {
-    const [sources, dbRows, tags] = await Promise.all([
+    const [sources, dbRows, tags, hiddenKeys] = await Promise.all([
       apiFetchSources(project.id),
       apiGetFiles(project.id),
       apiGetTags(project.id),
+      apiGetHiddenKeys(project.id),
     ]);
 
     state.sources = sources;
     state.activeSourceIds = new Set(sources.map(s => s.id));
     state.tags = tags;
+    // Init tag filter: all selected (= show all), matches visible state so dropdown isn't misleading
+    state.activeTagIds = new Set(tags.map(t => t.id));
+    state.filterNoTag = true;
+    state.hiddenKeys = new Set(hiddenKeys);
 
     if (dbRows.length > 0) {
       state.allFiles = dbRows.map(dbRowToFile);
+      state.allFiles.forEach(f => { f.isHidden = state.hiddenKeys.has(f.key); });
+      updateHiddenButton();
       renderFileList();
       renderStats();
     } else {
@@ -98,6 +108,18 @@ async function exitProject() {
   } catch (err) {
     console.error('Failed to reload projects:', err);
   }
+}
+
+// =====================================================================
+// HIDDEN FILE HELPERS
+// =====================================================================
+
+function updateHiddenButton() {
+  const count = state.hiddenKeys.size;
+  const btn = document.getElementById('btn-show-hidden');
+  document.getElementById('hidden-count').textContent = count;
+  btn.classList.toggle('hidden', count === 0);
+  btn.classList.toggle('btn-filter-new-active', state.showHidden);
 }
 
 // =====================================================================
@@ -174,14 +196,18 @@ function bindFileViewerEvents() {
   document.getElementById('btn-select-all-tags').addEventListener('click', () => {
     const q = state.tagSearch.toLowerCase();
     state.tags.filter(t => t.name.toLowerCase().includes(q)).forEach(t => state.activeTagIds.add(t.id));
+    if (!q) state.filterNoTag = true; // select all also includes "No Tag" when not searching
     renderTagFilter();
   });
   document.getElementById('btn-deselect-all-tags').addEventListener('click', () => {
     const q = state.tagSearch.toLowerCase();
     state.tags.filter(t => t.name.toLowerCase().includes(q)).forEach(t => state.activeTagIds.delete(t.id));
+    if (!q) state.filterNoTag = false; // deselect all also clears "No Tag" when not searching
     renderTagFilter();
   });
   document.getElementById('btn-apply-tag-filter').addEventListener('click', () => {
+    // Guard: do nothing if nothing selected (button should be disabled, but double-check)
+    if (state.activeTagIds.size === 0 && !state.filterNoTag) return;
     document.getElementById('tag-filter-panel').classList.add('hidden');
     renderFileList();
     renderStats();
@@ -222,6 +248,78 @@ function bindFileViewerEvents() {
     if (!btn) return;
     e.stopPropagation();
     openTagPicker(btn, btn.dataset.fileKey);
+  });
+
+  // Hide file — event delegation
+  document.getElementById('main-content').addEventListener('click', async e => {
+    const hideBtn = e.target.closest('.btn-hide-file');
+    if (hideBtn) {
+      e.stopPropagation();
+      const fileKey = hideBtn.dataset.fileKey;
+      try {
+        await apiHideFile(fileKey, state.currentProject?.id);
+        state.hiddenKeys.add(fileKey);
+        const file = state.allFiles.find(f => f.key === fileKey);
+        if (file) file.isHidden = true;
+        updateHiddenButton();
+        renderFileList();
+      } catch (err) { console.error('Hide failed:', err); }
+      return;
+    }
+    const unhideBtn = e.target.closest('.btn-unhide-file');
+    if (unhideBtn) {
+      e.stopPropagation();
+      const fileKey = unhideBtn.dataset.fileKey;
+      try {
+        await apiUnhideFile(fileKey, state.currentProject?.id);
+        state.hiddenKeys.delete(fileKey);
+        const file = state.allFiles.find(f => f.key === fileKey);
+        if (file) file.isHidden = false;
+        updateHiddenButton();
+        renderFileList();
+      } catch (err) { console.error('Unhide failed:', err); }
+      return;
+    }
+  });
+
+  // Show hidden toggle
+  document.getElementById('btn-show-hidden').addEventListener('click', () => {
+    state.showHidden = !state.showHidden;
+    updateHiddenButton();
+    renderFileList();
+    renderStats();
+  });
+
+  // Comment inline edit — click span to edit, blur/Enter to save
+  document.getElementById('main-content').addEventListener('click', e => {
+    const span = e.target.closest('.file-comment');
+    if (!span || span.querySelector('input')) return; // already editing
+    const fileKey = span.dataset.fileKey;
+    const current = span.textContent;
+    const input = document.createElement('input');
+    input.className = 'comment-input';
+    input.value = current;
+    input.placeholder = 'Add comment…';
+    span.textContent = '';
+    span.appendChild(input);
+    input.focus();
+    input.select();
+
+    const save = async () => {
+      const newVal = input.value.trim();
+      span.textContent = newVal;
+      const file = state.allFiles.find(f => f.key === fileKey);
+      if (file && file.comment !== newVal) {
+        file.comment = newVal;
+        try { await apiUpdateComment(fileKey, newVal, state.currentProject?.id); }
+        catch (err) { console.error('Comment save failed:', err); }
+      }
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { input.value = current; input.blur(); }
+    });
   });
 
   // Close dropdowns/pickers on outside click

@@ -1,8 +1,10 @@
 // API wrapper functions for tag endpoints
-// fileKey must be base64-encoded before sending in URL (contains :: and / chars)
+// fileKey must be URL-safe base64-encoded before sending in URL path
+// Standard btoa() produces +, /, = which break URL path routing — use URL-safe variant
 
 function encodeFileKey(fileKey) {
-  return btoa(fileKey);
+  // URL-safe base64: replace + → -, / → _, strip padding =
+  return btoa(fileKey).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 export async function apiGetTags(projectId) {

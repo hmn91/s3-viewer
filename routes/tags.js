@@ -1,8 +1,15 @@
 // Tag routes: CRUD for tags + file-tag assignment
-// fileKey in URL params is base64-encoded (contains :: and / which break routing)
+// fileKey in URL params is URL-safe base64-encoded (- instead of +, _ instead of /, no padding)
 // project_id is required for all file-tag operations to ensure per-project isolation.
 
 import { Router } from 'express';
+
+// Decode URL-safe base64 (RFC 4648 §5): - → +, _ → /, restore padding
+function decodeFileKey(encoded) {
+  const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+  return Buffer.from(padded, 'base64').toString();
+}
 
 export function createTagsRouter(db) {
   const router = Router();
@@ -63,7 +70,7 @@ export function createTagsRouter(db) {
   // POST /api/files/:fileKey/tags — assign tag { tagId, project_id }
   // project_id scopes the assignment so tags don't bleed across projects.
   router.post('/files/:fileKey/tags', (req, res) => {
-    const fileKey = Buffer.from(req.params.fileKey, 'base64').toString();
+    const fileKey = decodeFileKey(req.params.fileKey);
     const { tagId, project_id } = req.body;
     if (!tagId) return res.status(400).json({ error: 'tagId required' });
     if (!project_id) return res.status(400).json({ error: 'project_id required' });
@@ -78,7 +85,7 @@ export function createTagsRouter(db) {
 
   // DELETE /api/files/:fileKey/tags/:tagId?project_id=N — remove tag from file
   router.delete('/files/:fileKey/tags/:tagId', (req, res) => {
-    const fileKey = Buffer.from(req.params.fileKey, 'base64').toString();
+    const fileKey = decodeFileKey(req.params.fileKey);
     const projectId = req.query.project_id ? Number(req.query.project_id) : null;
     if (!projectId) return res.status(400).json({ error: 'project_id required' });
     db.prepare('DELETE FROM file_tags WHERE file_key = ? AND project_id = ? AND tag_id = ?')

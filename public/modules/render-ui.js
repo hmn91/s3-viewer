@@ -166,7 +166,7 @@ export function renderSourceDropdown() {
   }
 }
 
-// Render tag filter dropdown — mirrors source dropdown (search, select/deselect all, apply)
+// Render tag filter dropdown — tag checkboxes + "No Tag" option + apply validation
 export function renderTagFilter() {
   const dropdown = document.getElementById('tag-filter-dropdown');
   if (!dropdown) return;
@@ -177,9 +177,11 @@ export function renderTagFilter() {
   }
   dropdown.classList.remove('hidden');
 
-  // Update button count badge
-  const selected = state.tags.filter(t => state.activeTagIds.has(t.id)).length;
-  document.getElementById('tag-filter-count').textContent = selected ? `(${selected})` : '';
+  // Badge: only show when actively filtering (not all selected = "show all" default)
+  const allTagsSelected = state.filterNoTag && state.activeTagIds.size === state.tags.length;
+  const selectedCount = allTagsSelected ? 0
+    : state.tags.filter(t => state.activeTagIds.has(t.id)).length + (state.filterNoTag ? 1 : 0);
+  document.getElementById('tag-filter-count').textContent = selectedCount ? `(${selectedCount})` : '';
 
   // Filter list by tagSearch
   const q = state.tagSearch.toLowerCase();
@@ -187,6 +189,22 @@ export function renderTagFilter() {
 
   const list = document.getElementById('tag-filter-list');
   list.innerHTML = '';
+
+  // "No Tag" option — shown when search is empty (not filtered by search)
+  if (!q) {
+    const noTagItem = document.createElement('label');
+    noTagItem.className = 'source-dropdown-item';
+    noTagItem.innerHTML = `
+      <input type="checkbox" ${state.filterNoTag ? 'checked' : ''} />
+      <span class="badge-tag badge-tag-notag">No Tag</span>
+    `;
+    noTagItem.querySelector('input').addEventListener('change', e => {
+      state.filterNoTag = e.target.checked;
+      renderTagFilter();
+    });
+    list.appendChild(noTagItem);
+  }
+
   for (const tag of filtered) {
     const item = document.createElement('label');
     item.className = 'source-dropdown-item';
@@ -198,8 +216,14 @@ export function renderTagFilter() {
     item.querySelector('input').addEventListener('change', e => {
       if (e.target.checked) state.activeTagIds.add(tag.id);
       else state.activeTagIds.delete(tag.id);
-      renderTagFilter(); // only update count badge, apply triggers file list render
+      renderTagFilter();
     });
     list.appendChild(item);
   }
+
+  // Disable Apply if nothing selected — enforce at least 1 option
+  const applyBtn = document.getElementById('btn-apply-tag-filter');
+  const nothingSelected = state.activeTagIds.size === 0 && !state.filterNoTag;
+  applyBtn.disabled = nothingSelected;
+  applyBtn.title = nothingSelected ? 'Select at least one tag or "No Tag"' : '';
 }

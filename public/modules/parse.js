@@ -35,6 +35,7 @@ export function dbRowToFile(row) {
     firstSeen: row.first_seen,
     isNew: isNewFile(row.first_seen),
     tags: row.tags || [],
+    comment: row.comment || '',
   };
 }
 

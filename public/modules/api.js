@@ -70,3 +70,49 @@ export async function apiSaveSeen(files, projectId) {
   if (!res.ok) throw new Error('Failed to save seen files');
   return res.json();
 }
+
+// URL-safe base64 encode for file keys in URL params
+function encodeFileKey(fileKey) {
+  return btoa(fileKey).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+export async function apiUpdateComment(fileKey, comment, projectId) {
+  const encoded = encodeFileKey(fileKey);
+  const res = await fetch(`/api/files/${encoded}/comment`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comment, project_id: projectId }),
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || 'Failed to update comment');
+  }
+}
+
+export async function apiGetHiddenKeys(projectId) {
+  const res = await fetch(`/api/hidden?project_id=${projectId}`);
+  if (!res.ok) throw new Error('Failed to load hidden files');
+  return res.json(); // string[]
+}
+
+export async function apiHideFile(fileKey, projectId) {
+  const encoded = encodeFileKey(fileKey);
+  const res = await fetch(`/api/files/${encoded}/hide`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project_id: projectId }),
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || 'Failed to hide file');
+  }
+}
+
+export async function apiUnhideFile(fileKey, projectId) {
+  const encoded = encodeFileKey(fileKey);
+  const res = await fetch(`/api/files/${encoded}/hide?project_id=${projectId}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || 'Failed to unhide file');
+  }
+}

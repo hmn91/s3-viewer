@@ -91,8 +91,10 @@ export async function fetchAll() {
     }
 
     state.allFiles = allFiles;
-    // Init filter: all sources visible
+    // Init filters: all sources + all tags visible (= show all, consistent with initial state)
     state.activeSourceIds = new Set(sources.map(s => s.id));
+    state.activeTagIds = new Set(state.tags.map(t => t.id));
+    state.filterNoTag = true;
 
     // 6. Render
     renderFileList();

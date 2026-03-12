@@ -221,6 +221,7 @@ main {
 .col-size { width: 80px; text-align: right; color: var(--muted); }
 .col-modified { width: 145px; color: var(--muted); }
 .col-seen { width: 145px; color: var(--muted); }
+.col-comment { min-width: 160px; max-width: 280px; }
 
 .file-name {
   display: block;
@@ -381,6 +382,7 @@ main {
 .source-dropdown-actions { display: flex; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .source-dropdown-list { overflow-y: auto; flex: 1; padding: 4px 0; }
 .source-dropdown-footer { padding: 6px 8px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+.source-dropdown-footer .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .source-dropdown-item {
   display: flex;
   align-items: center;
@@ -448,6 +450,12 @@ main {
   font-weight: 600;
   color: #fff;
   margin-right: 3px;
+}
+/* "No Tag" badge — dashed border, muted style */
+.badge-tag-notag {
+  background: transparent !important;
+  color: #6b7280;
+  border: 1.5px dashed #9ca3af;
 }
 
 /* ===== TAGS COLUMN ===== */
@@ -635,6 +643,46 @@ main {
 .search-result-meta { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 600px; }
 .search-result-badge { font-size: 12px; color: var(--primary); }
 
+/* ===== HIDDEN FILES ===== */
+.file-row-hidden { opacity: 0.45; }
+.col-hide { width: 32px; text-align: center; }
+.btn-hide-file, .btn-unhide-file {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  opacity: 0.5;
+}
+.btn-hide-file:hover, .btn-unhide-file:hover { opacity: 1; background: var(--bg); }
+
+/* ===== COMMENT COLUMN ===== */
+.file-comment {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+  cursor: text;
+  min-height: 20px;
+  word-break: break-word;
+}
+.file-comment:empty::before {
+  content: 'Add comment…';
+  color: var(--muted);
+  font-style: italic;
+}
+.comment-input {
+  width: 100%;
+  border: 1px solid var(--primary);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   .header { padding: 10px 12px; }
@@ -642,7 +690,7 @@ main {
   main { padding: 12px; }
   .stats-bar { padding: 8px 12px; }
   .file-table { font-size: 12px; }
-  .col-modified, .col-seen, .col-tags { display: none; }
+  .col-modified, .col-seen, .col-tags, .col-comment { display: none; }
   .global-search-input { width: 140px; }
   .project-list-toolbar { flex-direction: column; align-items: stretch; }
   .project-search-wrap { max-width: 100%; }

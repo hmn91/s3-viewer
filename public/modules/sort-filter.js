@@ -16,6 +16,7 @@ const COMPARATORS = {
   size:        (a, b) => a.size - b.size,
   lastModified:(a, b) => (a.lastModified || 0) - (b.lastModified || 0),
   firstSeen:   (a, b) => new Date(a.firstSeen || 0) - new Date(b.firstSeen || 0),
+  comment:     (a, b) => (a.comment || '').localeCompare(b.comment || ''),
 };
 
 // Sort files by column + direction; null col = default (newest lastModified first)

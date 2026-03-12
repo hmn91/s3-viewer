@@ -1,6 +1,13 @@
-// Seen files routes: GET /api/files, GET /api/seen, POST /api/seen
+// Seen files routes: GET /api/files, GET /api/seen, POST /api/seen, hide/unhide routes
 
 import { Router } from 'express';
+
+// Decode URL-safe base64 (RFC 4648 §5): - → +, _ → /, restore padding
+function decodeFileKey(encoded) {
+  const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+  return Buffer.from(padded, 'base64').toString();
+}
 
 export function createFilesRouter(db) {
   const router = Router();
@@ -11,7 +18,7 @@ export function createFilesRouter(db) {
     // Join sources matching both url AND project_id to avoid ambiguity when same URL
     // exists in multiple projects.
     const query = projectId
-      ? `SELECT sf.key, sf.source_url, sf.first_seen, sf.size, sf.last_modified,
+      ? `SELECT sf.key, sf.source_url, sf.first_seen, sf.size, sf.last_modified, sf.comment,
                 s.label as source_label, s.id as source_id,
                 GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
          FROM seen_files sf
@@ -21,7 +28,7 @@ export function createFilesRouter(db) {
          WHERE sf.project_id = ?
          GROUP BY sf.key
          ORDER BY sf.last_modified DESC`
-      : `SELECT sf.key, sf.source_url, sf.first_seen, sf.size, sf.last_modified,
+      : `SELECT sf.key, sf.source_url, sf.first_seen, sf.size, sf.last_modified, sf.comment,
                 s.label as source_label, s.id as source_id,
                 GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
          FROM seen_files sf
@@ -41,6 +48,7 @@ export function createFilesRouter(db) {
       last_modified: row.last_modified,
       source_label: row.source_label,
       source_id: row.source_id,
+      comment: row.comment || null,
       tags: row.tags_raw
         ? row.tags_raw.split(',').map(t => {
             const [id, name, color] = t.split(':');
@@ -103,6 +111,52 @@ export function createFilesRouter(db) {
       return res.status(500).json({ error: err.message });
     }
     res.json({ inserted });
+  });
+
+  // PUT /api/files/:fileKey/comment — save comment for a file
+  router.put('/files/:fileKey/comment', (req, res) => {
+    const fileKey = decodeFileKey(req.params.fileKey);
+    const { comment, project_id } = req.body;
+    if (!project_id) return res.status(400).json({ error: 'project_id required' });
+    try {
+      db.prepare('UPDATE seen_files SET comment = ? WHERE key = ? AND project_id = ?')
+        .run(comment || null, fileKey, Number(project_id));
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/files/:fileKey/hide — hide a file
+  router.post('/files/:fileKey/hide', (req, res) => {
+    const fileKey = decodeFileKey(req.params.fileKey);
+    const { project_id } = req.body;
+    if (!project_id) return res.status(400).json({ error: 'project_id required' });
+    try {
+      db.prepare('INSERT OR IGNORE INTO hidden_files (file_key, project_id) VALUES (?, ?)')
+        .run(fileKey, Number(project_id));
+      res.json({ hidden: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/files/:fileKey/hide?project_id=N — unhide a file
+  router.delete('/files/:fileKey/hide', (req, res) => {
+    const fileKey = decodeFileKey(req.params.fileKey);
+    const projectId = req.query.project_id ? Number(req.query.project_id) : null;
+    if (!projectId) return res.status(400).json({ error: 'project_id required' });
+    db.prepare('DELETE FROM hidden_files WHERE file_key = ? AND project_id = ?')
+      .run(fileKey, projectId);
+    res.json({ hidden: false });
+  });
+
+  // GET /api/hidden?project_id=N — list hidden file keys for project
+  router.get('/hidden', (req, res) => {
+    const projectId = req.query.project_id ? Number(req.query.project_id) : null;
+    if (!projectId) return res.status(400).json({ error: 'project_id required' });
+    const rows = db.prepare('SELECT file_key FROM hidden_files WHERE project_id = ?').all(projectId);
+    res.json(rows.map(r => r.file_key));
   });
 
   return router;

@@ -86,7 +86,21 @@ db.exec(`
     PRIMARY KEY (file_key, project_id, tag_id),
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS hidden_files (
+    file_key   TEXT NOT NULL,
+    project_id INTEGER NOT NULL,
+    PRIMARY KEY (file_key, project_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+  );
 `);
+
+// === MIGRATIONS ===
+// Add comment column to seen_files if missing (schema evolution without data loss)
+const sfCols = db.prepare("PRAGMA table_info(seen_files)").all();
+if (!sfCols.some(c => c.name === 'comment')) {
+  db.exec("ALTER TABLE seen_files ADD COLUMN comment TEXT");
+}
 
 // === MIDDLEWARE ===
 app.use(express.json());
