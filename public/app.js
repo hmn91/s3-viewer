@@ -11,6 +11,7 @@ import { fetchAll } from './modules/fetch-all.js';
 import { dbRowToFile } from './modules/parse.js';
 import { openTagModal, closeTagModal } from './modules/tags-modal.js';
 import { openTagPicker, closeAllTagPickers } from './modules/file-tag-ui.js';
+import { updateFileRowHidden } from './modules/render-table.js';
 import {
   showProjectListView, showProjectDetailView,
   renderProjectList, bindNewProjectButton, setProjectSelectHandler,
@@ -113,6 +114,18 @@ async function exitProject() {
 // =====================================================================
 // HIDDEN FILE HELPERS
 // =====================================================================
+
+/** Scroll to file row by key and flash-highlight it for 2s */
+function highlightFileRow(fileKey) {
+  // Use requestAnimationFrame to ensure the DOM has rendered first
+  requestAnimationFrame(() => {
+    const row = document.querySelector(`tr[data-file-key="${CSS.escape(fileKey)}"]`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('file-row-highlight');
+    setTimeout(() => row.classList.remove('file-row-highlight'), 2000);
+  });
+}
 
 function updateHiddenButton() {
   const count = state.hiddenKeys.size;
@@ -260,9 +273,8 @@ function bindFileViewerEvents() {
         await apiHideFile(fileKey, state.currentProject?.id);
         state.hiddenKeys.add(fileKey);
         const file = state.allFiles.find(f => f.key === fileKey);
-        if (file) file.isHidden = true;
+        if (file) { file.isHidden = true; updateFileRowHidden(file); }
         updateHiddenButton();
-        renderFileList();
       } catch (err) { console.error('Hide failed:', err); }
       return;
     }
@@ -274,9 +286,8 @@ function bindFileViewerEvents() {
         await apiUnhideFile(fileKey, state.currentProject?.id);
         state.hiddenKeys.delete(fileKey);
         const file = state.allFiles.find(f => f.key === fileKey);
-        if (file) file.isHidden = false;
+        if (file) { file.isHidden = false; updateFileRowHidden(file); }
         updateHiddenButton();
-        renderFileList();
       } catch (err) { console.error('Unhide failed:', err); }
       return;
     }
@@ -353,12 +364,14 @@ async function init() {
     enterProject(newProject);
   });
 
-  // Handle search result clicks that pass a projectId (need to load project object)
-  bindProjectSearch(async (projectId) => {
+  // Handle search result clicks that pass a projectId + optional fileKey
+  bindProjectSearch(async (projectId, fileKey) => {
     try {
       const projects = await apiGetProjects();
       const project = projects.find(p => p.id === projectId);
-      if (project) enterProject(project);
+      if (!project) return;
+      await enterProject(project);
+      if (fileKey) highlightFileRow(fileKey);
     } catch (err) {
       console.error('Failed to enter project from search:', err);
     }

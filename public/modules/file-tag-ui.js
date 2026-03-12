@@ -3,7 +3,8 @@
 
 import { state } from './state.js';
 import { apiAssignTag, apiRemoveTag, apiCreateTag } from './api-tags.js';
-import { renderFileList, renderTagFilter } from './render-ui.js';
+import { renderTagFilter } from './render-ui.js';
+import { updateFileRowTags } from './render-table.js';
 import { escHtml } from './utils.js';
 
 let activePopover = null;
@@ -233,7 +234,7 @@ async function toggleTag(tag, file, assignedIds) {
       await apiRemoveTag(file.key, tag.id, projectId);
       file.tags = (file.tags || []).filter(t => t.id !== tag.id);
       assignedIds.delete(tag.id);
-      renderFileList();
+      updateFileRowTags(file);
     } catch (err) { console.error('Remove tag failed:', err); }
   } else {
     try {
@@ -244,7 +245,7 @@ async function toggleTag(tag, file, assignedIds) {
       }
       assignedIds.add(tag.id);
       addRecent(tag.id);
-      renderFileList();
+      updateFileRowTags(file);
     } catch (err) { console.error('Assign tag failed:', err); }
   }
 }

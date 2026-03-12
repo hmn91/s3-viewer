@@ -42,8 +42,10 @@ export async function apiUpdateLastFetch(id) {
   return res.json();
 }
 
-export async function apiSearch(q, type = 'all') {
-  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&type=${type}`);
+export async function apiSearch(q, type = 'all', includeHidden = false) {
+  const params = new URLSearchParams({ q, type });
+  if (includeHidden) params.set('include_hidden', '1');
+  const res = await fetch(`/api/search?${params}`);
   if (!res.ok) throw new Error('Search failed');
   return res.json();
 }

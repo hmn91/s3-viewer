@@ -642,6 +642,37 @@ main {
 .search-result-main { font-weight: 500; font-size: 14px; }
 .search-result-meta { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 600px; }
 .search-result-badge { font-size: 12px; color: var(--primary); }
+.search-result-comment { font-style: italic; margin-left: 6px; }
+.search-result-hidden { opacity: 0.65; }
+.badge-hidden-file {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  margin-right: 5px;
+  vertical-align: middle;
+  letter-spacing: 0.03em;
+}
+.search-highlight {
+  background: #fef08a;
+  color: #713f12;
+  border-radius: 2px;
+  padding: 0 1px;
+  font-style: normal;
+}
+.search-hidden-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
 
 /* ===== HIDDEN FILES ===== */
 .file-row-hidden { opacity: 0.45; }
@@ -656,6 +687,13 @@ main {
   opacity: 0.5;
 }
 .btn-hide-file:hover, .btn-unhide-file:hover { opacity: 1; background: var(--bg); }
+
+/* ===== FILE ROW HIGHLIGHT (global search navigation) ===== */
+@keyframes highlight-fade {
+  0%   { background: #fef9c3; }
+  100% { background: transparent; }
+}
+.file-row-highlight { animation: highlight-fade 2s ease-out forwards; }
 
 /* ===== COMMENT COLUMN ===== */
 .file-comment {

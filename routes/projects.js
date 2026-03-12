@@ -100,16 +100,22 @@ export function createProjectsRouter(db) {
     }
 
     if (type === 'all' || type === 'file') {
+      const includeHidden = req.query.include_hidden === '1';
+      const hiddenJoin = `LEFT JOIN hidden_files hf ON sf.key = hf.file_key AND sf.project_id = hf.project_id`;
+      const hiddenFilter = includeHidden ? '' : 'AND hf.file_key IS NULL';
       result.files = db.prepare(`
-        SELECT sf.key, sf.source_url, sf.last_modified,
+        SELECT sf.key, sf.source_url, sf.last_modified, sf.comment,
                s.label AS source_label, s.project_id,
-               p.name  AS project_name
+               p.name  AS project_name,
+               CASE WHEN hf.file_key IS NOT NULL THEN 1 ELSE 0 END AS is_hidden
         FROM seen_files sf
         JOIN sources s ON sf.source_url = s.url AND s.project_id = sf.project_id
         JOIN projects p ON sf.project_id = p.id
-        WHERE LOWER(sf.key) LIKE LOWER(?)
+        ${hiddenJoin}
+        WHERE (LOWER(sf.key) LIKE LOWER(?) OR LOWER(COALESCE(sf.comment,'')) LIKE LOWER(?))
+        ${hiddenFilter}
         ORDER BY sf.last_modified DESC LIMIT 20
-      `).all(like);
+      `).all(like, like);
     }
 
     if (type === 'all' || type === 'source') {
