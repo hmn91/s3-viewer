@@ -227,16 +227,17 @@ function handleNavKey(e, el, searchInput, getItems) {
 }
 
 async function toggleTag(tag, file, assignedIds) {
+  const projectId = state.currentProject?.id;
   if (assignedIds.has(tag.id)) {
     try {
-      await apiRemoveTag(file.key, tag.id);
+      await apiRemoveTag(file.key, tag.id, projectId);
       file.tags = (file.tags || []).filter(t => t.id !== tag.id);
       assignedIds.delete(tag.id);
       renderFileList();
     } catch (err) { console.error('Remove tag failed:', err); }
   } else {
     try {
-      await apiAssignTag(file.key, tag.id);
+      await apiAssignTag(file.key, tag.id, projectId);
       if (!file.tags) file.tags = [];
       if (!file.tags.find(t => t.id === tag.id)) {
         file.tags.push({ id: tag.id, name: tag.name, color: tag.color });
@@ -252,7 +253,7 @@ async function createAndAssign(name, file, assignedIds) {
   try {
     const color = PRESET_COLORS[colorIdx % PRESET_COLORS.length];
     colorIdx++;
-    const newTag = await apiCreateTag(name, color);
+    const newTag = await apiCreateTag(name, color, state.currentProject?.id);
     state.tags.push(newTag);
     renderTagFilter();
     await toggleTag(newTag, file, assignedIds);
