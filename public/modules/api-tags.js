@@ -42,12 +42,12 @@ export async function apiDeleteTag(id) {
   }
 }
 
-export async function apiAssignTag(fileKey, tagId) {
+export async function apiAssignTag(fileKey, tagId, projectId) {
   const encoded = encodeFileKey(fileKey);
   const res = await fetch(`/api/files/${encoded}/tags`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tagId }),
+    body: JSON.stringify({ tagId, project_id: projectId }),
   });
   if (!res.ok) {
     const data = await res.json();
@@ -55,9 +55,9 @@ export async function apiAssignTag(fileKey, tagId) {
   }
 }
 
-export async function apiRemoveTag(fileKey, tagId) {
+export async function apiRemoveTag(fileKey, tagId, projectId) {
   const encoded = encodeFileKey(fileKey);
-  const res = await fetch(`/api/files/${encoded}/tags/${tagId}`, { method: 'DELETE' });
+  const res = await fetch(`/api/files/${encoded}/tags/${tagId}?project_id=${projectId}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = await res.json();
     throw new Error(data.error || 'Failed to remove tag');
