@@ -3,3 +3,5 @@ data/
 *.db
 *.db-shm
 *.db-wal
+plans/
+package-lock.json
