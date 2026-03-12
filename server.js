@@ -19,115 +19,74 @@ const dataDir = join(__dirname, 'data');
 mkdirSync(dataDir, { recursive: true });
 const db = new DatabaseSync(join(dataDir, 's3viewer.db'));
 
-// Enable FK constraints (must be set per-connection in SQLite)
 db.exec('PRAGMA foreign_keys = ON');
 
+// === SCHEMA RESET GUARD ===
+// If file_tags lacks project_id (old schema), drop all tables and start fresh.
+// Accepts data loss in exchange for full project isolation.
+const ftSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='file_tags'").get();
+if (ftSchema && !ftSchema.sql.includes('project_id')) {
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec(`
+    DROP TABLE IF EXISTS file_tags;
+    DROP TABLE IF EXISTS seen_files;
+    DROP TABLE IF EXISTS tags;
+    DROP TABLE IF EXISTS sources;
+    DROP TABLE IF EXISTS projects;
+  `);
+  db.exec('PRAGMA foreign_keys = ON');
+}
+
+// === CLEAN SCHEMA ===
+// Every table is fully project-scoped. file_tags includes project_id so tag
+// assignments are isolated per project even when the same S3 key appears in multiple projects.
 db.exec(`
   CREATE TABLE IF NOT EXISTS projects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL UNIQUE,
     created_at TEXT DEFAULT (datetime('now')),
     last_fetch_at TEXT
   );
+
   CREATE TABLE IF NOT EXISTS sources (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    label TEXT NOT NULL,
-    url TEXT NOT NULL UNIQUE,
-    created_at TEXT DEFAULT (datetime('now'))
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    label      TEXT NOT NULL,
+    url        TEXT NOT NULL,
+    project_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(url, project_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
   );
+
   CREATE TABLE IF NOT EXISTS seen_files (
-    key TEXT PRIMARY KEY,
-    source_url TEXT NOT NULL,
-    first_seen TEXT NOT NULL,
-    size INTEGER,
-    last_modified TEXT
+    key          TEXT NOT NULL,
+    project_id   INTEGER NOT NULL,
+    source_url   TEXT NOT NULL,
+    first_seen   TEXT NOT NULL,
+    size         INTEGER,
+    last_modified TEXT,
+    PRIMARY KEY (key, project_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
   );
+
   CREATE TABLE IF NOT EXISTS tags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    color TEXT NOT NULL DEFAULT '#6366f1',
-    created_at TEXT DEFAULT (datetime('now'))
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    color      TEXT NOT NULL DEFAULT '#6366f1',
+    project_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(name, project_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
   );
+
   CREATE TABLE IF NOT EXISTS file_tags (
-    file_key TEXT NOT NULL,
-    tag_id INTEGER NOT NULL,
-    PRIMARY KEY (file_key, tag_id),
+    file_key   TEXT NOT NULL,
+    project_id INTEGER NOT NULL,
+    tag_id     INTEGER NOT NULL,
+    PRIMARY KEY (file_key, project_id, tag_id),
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   );
 `);
-
-// === MIGRATIONS ===
-
-// Check if a column exists in a table (guard for ALTER TABLE)
-function columnExists(table, col) {
-  return db.prepare(`PRAGMA table_info(${table})`).all().some(r => r.name === col);
-}
-
-// Add project_id to sources if missing (from before project support)
-if (!columnExists('sources', 'project_id')) {
-  db.exec('ALTER TABLE sources ADD COLUMN project_id INTEGER');
-}
-
-// Add project_id to tags if missing
-if (!columnExists('tags', 'project_id')) {
-  db.exec('ALTER TABLE tags ADD COLUMN project_id INTEGER');
-}
-
-// Migrate sources table from UNIQUE(url) → UNIQUE(url, project_id) so same S3 URL
-// can be added to different projects independently.
-const sourcesSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='sources'").get();
-if (sourcesSchema && !sourcesSchema.sql.includes('UNIQUE(url, project_id)')) {
-  db.exec('PRAGMA foreign_keys = OFF');
-  db.exec(`
-    CREATE TABLE sources_new (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      label TEXT NOT NULL,
-      url TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
-      project_id INTEGER,
-      UNIQUE(url, project_id)
-    );
-    INSERT INTO sources_new SELECT id, label, url, created_at, project_id FROM sources;
-    DROP TABLE sources;
-    ALTER TABLE sources_new RENAME TO sources;
-  `);
-  db.exec('PRAGMA foreign_keys = ON');
-}
-
-// Migrate tags table from UNIQUE(name) → UNIQUE(name, project_id) so same tag name
-// can exist in different projects. SQLite requires a table recreation to change constraints.
-const tagsSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tags'").get();
-if (tagsSchema && !tagsSchema.sql.includes('UNIQUE(name, project_id)')) {
-  db.exec('PRAGMA foreign_keys = OFF');
-  db.exec(`
-    CREATE TABLE tags_new (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      color TEXT NOT NULL DEFAULT '#6366f1',
-      created_at TEXT DEFAULT (datetime('now')),
-      project_id INTEGER,
-      UNIQUE(name, project_id)
-    );
-    INSERT INTO tags_new SELECT id, name, color, created_at, project_id FROM tags;
-    DROP TABLE tags;
-    ALTER TABLE tags_new RENAME TO tags;
-  `);
-  db.exec('PRAGMA foreign_keys = ON');
-}
-
-// Migrate orphan records into a "Default" project
-const orphanSource = db.prepare('SELECT id FROM sources WHERE project_id IS NULL LIMIT 1').get();
-const orphanTag = db.prepare('SELECT id FROM tags WHERE project_id IS NULL LIMIT 1').get();
-if (orphanSource || orphanTag) {
-  let defaultProject = db.prepare("SELECT id FROM projects WHERE name = 'Default'").get();
-  if (!defaultProject) {
-    const result = db.prepare("INSERT INTO projects (name) VALUES ('Default')").run();
-    defaultProject = { id: result.lastInsertRowid };
-  }
-  const pid = defaultProject.id;
-  db.prepare('UPDATE sources SET project_id = ? WHERE project_id IS NULL').run(pid);
-  db.prepare('UPDATE tags SET project_id = ? WHERE project_id IS NULL').run(pid);
-}
 
 // === MIDDLEWARE ===
 app.use(express.json());
@@ -141,7 +100,7 @@ app.use('/api', createTagsRouter(db));
 app.use('/api', createProxyRouter());
 
 // === FALLBACK SPA ===
-app.get('*', (req, res) => {
+app.get('*', (_req, res) => {
   res.sendFile(join(__dirname, 'public', 'index.html'));
 });
 
