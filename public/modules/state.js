@@ -1,7 +1,8 @@
 // Centralized app state — single source of truth
 
 export const state = {
-  sources: [],         // [{ id, label, url }]
+  currentProject: null, // { id, name, created_at, last_fetch_at } — null = project list screen
+  sources: [],         // [{ id, label, url, project_id }]
   allFiles: [],        // parsed file objects
   seenMap: {},         // { key: { firstSeen, ... } } from /api/seen
   sortCol: null,       // column key or null (null = default: newest lastModified)

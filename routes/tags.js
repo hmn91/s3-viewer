@@ -6,24 +6,31 @@ import { Router } from 'express';
 export function createTagsRouter(db) {
   const router = Router();
 
-  // GET /api/tags — list all tags
-  router.get('/tags', (_req, res) => {
-    const rows = db.prepare('SELECT * FROM tags ORDER BY name').all();
+  // GET /api/tags?project_id=N — list tags, optionally filtered by project
+  router.get('/tags', (req, res) => {
+    const projectId = req.query.project_id ? Number(req.query.project_id) : null;
+    const rows = projectId
+      ? db.prepare('SELECT * FROM tags WHERE project_id = ? ORDER BY name').all(projectId)
+      : db.prepare('SELECT * FROM tags ORDER BY name').all();
     res.json(rows);
   });
 
-  // POST /api/tags — create tag { name, color? }
+  // POST /api/tags — create tag { name, color?, project_id }
   router.post('/tags', (req, res) => {
-    const { name, color = '#6366f1' } = req.body;
+    const { name, color = '#6366f1', project_id } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'name required' });
+    if (!project_id) return res.status(400).json({ error: 'project_id required' });
+    const pid = Number(project_id);
+    // App-level check: tag name must be unique within the same project
+    const existing = db.prepare('SELECT id FROM tags WHERE name = ? AND project_id = ?').get(name.trim(), pid);
+    if (existing) return res.status(409).json({ error: 'Tag name already exists in this project' });
     try {
       const result = db.prepare(
-        'INSERT INTO tags (name, color) VALUES (?, ?)'
-      ).run(name.trim(), color);
+        'INSERT INTO tags (name, color, project_id) VALUES (?, ?, ?)'
+      ).run(name.trim(), color, pid);
       const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(result.lastInsertRowid);
       res.status(201).json(tag);
     } catch (err) {
-      if (err.message.includes('UNIQUE')) return res.status(409).json({ error: 'Tag name already exists' });
       res.status(500).json({ error: err.message });
     }
   });
@@ -34,15 +41,16 @@ export function createTagsRouter(db) {
     const id = Number(req.params.id);
     const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(id);
     if (!tag) return res.status(404).json({ error: 'Tag not found' });
+    const newName = name?.trim() ?? tag.name;
+    // Check name uniqueness within same project (exclude self)
+    if (newName !== tag.name) {
+      const conflict = db.prepare('SELECT id FROM tags WHERE name = ? AND project_id = ? AND id != ?').get(newName, tag.project_id, id);
+      if (conflict) return res.status(409).json({ error: 'Tag name already exists in this project' });
+    }
     try {
-      db.prepare('UPDATE tags SET name = ?, color = ? WHERE id = ?').run(
-        name?.trim() ?? tag.name,
-        color ?? tag.color,
-        id
-      );
+      db.prepare('UPDATE tags SET name = ?, color = ? WHERE id = ?').run(newName, color ?? tag.color, id);
       res.json(db.prepare('SELECT * FROM tags WHERE id = ?').get(id));
     } catch (err) {
-      if (err.message.includes('UNIQUE')) return res.status(409).json({ error: 'Tag name already exists' });
       res.status(500).json({ error: err.message });
     }
   });

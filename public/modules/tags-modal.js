@@ -159,7 +159,7 @@ function bindAddTag() {
     if (!name) return;
     hideError();
     try {
-      const tag = await apiCreateTag(name, selectedColor);
+      const tag = await apiCreateTag(name, selectedColor, state.currentProject?.id);
       state.tags.push(tag);
       nameInput.value = '';
       renderTagList();

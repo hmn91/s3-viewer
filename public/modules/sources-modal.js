@@ -130,7 +130,7 @@ export async function addSource() {
   }
 
   try {
-    const newSrc = await apiAddSource(label, url);
+    const newSrc = await apiAddSource(label, url, state.currentProject?.id);
     state.sources.push(newSrc);
     state.activeSourceIds.add(newSrc.id);
     clearAddForm();

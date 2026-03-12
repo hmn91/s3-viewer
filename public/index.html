@@ -7,9 +7,37 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- ===== VIEW: PROJECT LIST ===== -->
+  <div id="view-projects">
+    <header class="header">
+      <h1 class="header-title">S3 File Viewer</h1>
+    </header>
+    <div class="project-list-toolbar">
+      <div class="project-search-wrap">
+        <input id="project-search" type="search" placeholder="🔍 Search…" class="global-search-input" />
+        <select id="project-search-type" class="select-control">
+          <option value="all">All</option>
+          <option value="project">Project name</option>
+          <option value="file">File in project</option>
+          <option value="source">Source (name/URL)</option>
+          <option value="tag">Tag name</option>
+        </select>
+      </div>
+      <button id="btn-new-project" class="btn btn-primary">+ New Project</button>
+    </div>
+    <div id="project-list-container" class="project-list-container"></div>
+    <div id="search-results-container" class="search-results-container hidden"></div>
+  </div>
+
+  <!-- ===== VIEW: PROJECT DETAIL (file viewer) ===== -->
+  <div id="view-project-detail" class="hidden">
+
   <!-- ===== HEADER ===== -->
   <header class="header">
-    <h1 class="header-title">S3 File Viewer</h1>
+    <div class="header-left">
+      <button id="btn-back-to-projects" class="btn btn-secondary">← Projects</button>
+      <h1 class="header-title" id="project-detail-title">Project</h1>
+    </div>
     <div class="header-actions">
       <button id="btn-manage-tags" class="btn btn-secondary">🏷 Tags</button>
       <button id="btn-manage-sources" class="btn btn-secondary">⚙ Manage Sources</button>
@@ -88,6 +116,8 @@
   <main id="main-content">
     <div class="empty-state">Add sources via ⚙ Manage Sources, then click ⬇ Fetch All.</div>
   </main>
+
+  </div><!-- end #view-project-detail -->
 
   <!-- ===== MANAGE SOURCES MODAL ===== -->
   <div id="modal-overlay" class="modal-overlay hidden">

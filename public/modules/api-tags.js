@@ -5,17 +5,18 @@ function encodeFileKey(fileKey) {
   return btoa(fileKey);
 }
 
-export async function apiGetTags() {
-  const res = await fetch('/api/tags');
+export async function apiGetTags(projectId) {
+  const url = projectId ? `/api/tags?project_id=${projectId}` : '/api/tags';
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to load tags');
   return res.json();
 }
 
-export async function apiCreateTag(name, color) {
+export async function apiCreateTag(name, color, projectId) {
   const res = await fetch('/api/tags', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, color }),
+    body: JSON.stringify({ name, color, project_id: projectId }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to create tag');

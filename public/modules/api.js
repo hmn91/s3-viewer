@@ -1,16 +1,17 @@
 // API wrapper functions for all backend endpoints
 
-export async function apiFetchSources() {
-  const res = await fetch('/api/sources');
+export async function apiFetchSources(projectId) {
+  const url = projectId ? `/api/sources?project_id=${projectId}` : '/api/sources';
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to load sources');
   return res.json();
 }
 
-export async function apiAddSource(label, url) {
+export async function apiAddSource(label, url, projectId) {
   const res = await fetch('/api/sources', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ label, url }),
+    body: JSON.stringify({ label, url, project_id: projectId }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to add source');
@@ -45,14 +46,17 @@ export async function apiProxyFetch(url) {
   return res.text();
 }
 
-export async function apiGetFiles() {
-  const res = await fetch('/api/files');
+export async function apiGetFiles(projectId) {
+  const url = projectId ? `/api/files?project_id=${projectId}` : '/api/files';
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to load files');
   return res.json();
 }
 
-export async function apiGetSeen() {
-  const res = await fetch('/api/seen');
+export async function apiGetSeen(projectId) {
+  // seen map is used for fetch-all dedup; we filter by project via the sources already loaded
+  const url = projectId ? `/api/seen?project_id=${projectId}` : '/api/seen';
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to load seen files');
   return res.json();
 }

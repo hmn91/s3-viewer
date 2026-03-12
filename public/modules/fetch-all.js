@@ -2,6 +2,7 @@
 
 import { state } from './state.js';
 import { apiFetchSources, apiProxyFetch, apiGetSeen, apiSaveSeen } from './api.js';
+import { apiUpdateLastFetch } from './project-api.js';
 import { parseS3Xml } from './parse.js';
 import { isNewFile } from './sort-filter.js';
 import { renderFileList, renderStats, renderSourceDropdown, renderTagFilter } from './render-ui.js';
@@ -14,9 +15,11 @@ export async function fetchAll() {
   document.getElementById('error-banner').classList.add('hidden');
   state.fetchErrors = {};
 
+  const projectId = state.currentProject?.id;
+
   try {
-    // 1. Load latest sources + seen map in parallel
-    const [sources, seenMap] = await Promise.all([apiFetchSources(), apiGetSeen()]);
+    // 1. Load latest sources + seen map in parallel (scoped to current project)
+    const [sources, seenMap] = await Promise.all([apiFetchSources(projectId), apiGetSeen(projectId)]);
     state.sources = sources;
     state.seenMap = seenMap;
 
@@ -107,10 +110,14 @@ export async function fetchAll() {
       banner.classList.remove('hidden');
     }
 
-    // 8. Update last fetch timestamp in localStorage
+    // 8. Update last fetch timestamp in DB (per project) and localStorage (per project key)
     const now = formatDate(new Date());
-    localStorage.setItem('lastFetch', now);
+    const lsKey = projectId ? `lastFetch_${projectId}` : 'lastFetch';
+    localStorage.setItem(lsKey, now);
     document.getElementById('last-fetch-label').textContent = `Last fetch: ${now}`;
+    if (projectId) {
+      apiUpdateLastFetch(projectId).catch(() => {}); // fire-and-forget, non-critical
+    }
 
   } finally {
     btn.disabled = false;

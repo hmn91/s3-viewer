@@ -5,19 +5,32 @@ import { Router } from 'express';
 export function createFilesRouter(db) {
   const router = Router();
 
-  // GET /api/files — return all seen files joined with source label + tags
+  // GET /api/files?project_id=N — return seen files filtered by project (via source)
   router.get('/files', (req, res) => {
-    const rows = db.prepare(`
-      SELECT sf.key, sf.source_url, sf.first_seen, sf.size, sf.last_modified,
-             s.label as source_label, s.id as source_id,
-             GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
-      FROM seen_files sf
-      LEFT JOIN sources s ON sf.source_url = s.url
-      LEFT JOIN file_tags ft ON sf.key = ft.file_key
-      LEFT JOIN tags t ON ft.tag_id = t.id
-      GROUP BY sf.key
-      ORDER BY sf.last_modified DESC
-    `).all();
+    const projectId = req.query.project_id ? Number(req.query.project_id) : null;
+    const query = projectId
+      ? `SELECT sf.key, sf.source_url, sf.first_seen, sf.size, sf.last_modified,
+                s.label as source_label, s.id as source_id,
+                GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
+         FROM seen_files sf
+         LEFT JOIN sources s ON sf.source_url = s.url
+         LEFT JOIN file_tags ft ON sf.key = ft.file_key
+         LEFT JOIN tags t ON ft.tag_id = t.id
+         WHERE s.project_id = ?
+         GROUP BY sf.key
+         ORDER BY sf.last_modified DESC`
+      : `SELECT sf.key, sf.source_url, sf.first_seen, sf.size, sf.last_modified,
+                s.label as source_label, s.id as source_id,
+                GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
+         FROM seen_files sf
+         LEFT JOIN sources s ON sf.source_url = s.url
+         LEFT JOIN file_tags ft ON sf.key = ft.file_key
+         LEFT JOIN tags t ON ft.tag_id = t.id
+         GROUP BY sf.key
+         ORDER BY sf.last_modified DESC`;
+    const rows = projectId
+      ? db.prepare(query).all(projectId)
+      : db.prepare(query).all();
     const result = rows.map(row => ({
       key: row.key,
       source_url: row.source_url,
@@ -37,7 +50,7 @@ export function createFilesRouter(db) {
   });
 
   // GET /api/seen — return map { key: { sourceUrl, firstSeen, size, lastModified } }
-  router.get('/seen', (req, res) => {
+  router.get('/seen', (_req, res) => {
     const rows = db.prepare('SELECT * FROM seen_files').all();
     const map = {};
     for (const row of rows) {
