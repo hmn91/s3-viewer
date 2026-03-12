@@ -61,11 +61,11 @@ export async function apiGetSeen(projectId) {
   return res.json();
 }
 
-export async function apiSaveSeen(files) {
+export async function apiSaveSeen(files, projectId) {
   const res = await fetch('/api/seen', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files }),
+    body: JSON.stringify({ files, project_id: projectId }),
   });
   if (!res.ok) throw new Error('Failed to save seen files');
   return res.json();

@@ -85,9 +85,9 @@ export async function fetchAll() {
       f.tags = f.tags || [];
     }
 
-    // 5. Persist newly discovered files
+    // 5. Persist newly discovered files (scoped to current project)
     if (newFileEntries.length > 0) {
-      await apiSaveSeen(newFileEntries);
+      await apiSaveSeen(newFileEntries, projectId);
     }
 
     state.allFiles = allFiles;

@@ -6,9 +6,47 @@ import { parseS3Xml } from './parse.js';
 import { renderSourceDropdown } from './render-ui.js';
 import { escHtml } from './utils.js';
 
+// Derive a human-readable label from a URL.
+// Uses last path segment (e.g. /documents/ → "Documents"),
+// or site name if no meaningful path (e.g. https://www.github.com → "Github").
+function labelFromUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl);
+    const parts = u.pathname.split('/').filter(p => p.length > 0);
+    const segment = parts.length > 0 ? parts[parts.length - 1] : '';
+    const raw = segment || u.hostname.replace(/^www\./, '').split('.')[0];
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  } catch {
+    return '';
+  }
+}
+
+// Wire up URL→Label auto-fill once (idempotent via dataset flag).
+function initUrlAutoLabel() {
+  const urlInput = document.getElementById('input-url');
+  const labelInput = document.getElementById('input-label');
+  if (urlInput.dataset.autoLabelInit) return;
+  urlInput.dataset.autoLabelInit = '1';
+
+  // Track whether label was set by auto-fill (vs user typing)
+  let autoFilled = false;
+  labelInput.addEventListener('input', () => { autoFilled = false; });
+
+  urlInput.addEventListener('input', () => {
+    if (labelInput.value === '' || autoFilled) {
+      const suggestion = labelFromUrl(urlInput.value.trim());
+      if (suggestion) {
+        labelInput.value = suggestion;
+        autoFilled = true;
+      }
+    }
+  });
+}
+
 export function openModal() {
   document.getElementById('modal-overlay').classList.remove('hidden');
   renderSourcesList();
+  initUrlAutoLabel();
   document.getElementById('input-label').focus();
 }
 
