@@ -1,12 +1,13 @@
 // Tag routes: CRUD for tags + file-tag assignment
 // fileKey in URL params is base64-encoded (contains :: and / which break routing)
+// project_id is required for all file-tag operations to ensure per-project isolation.
 
 import { Router } from 'express';
 
 export function createTagsRouter(db) {
   const router = Router();
 
-  // GET /api/tags?project_id=N — list tags, optionally filtered by project
+  // GET /api/tags?project_id=N — list tags filtered by project
   router.get('/tags', (req, res) => {
     const projectId = req.query.project_id ? Number(req.query.project_id) : null;
     const rows = projectId
@@ -21,15 +22,13 @@ export function createTagsRouter(db) {
     if (!name?.trim()) return res.status(400).json({ error: 'name required' });
     if (!project_id) return res.status(400).json({ error: 'project_id required' });
     const pid = Number(project_id);
-    // App-level check: tag name must be unique within the same project
     const existing = db.prepare('SELECT id FROM tags WHERE name = ? AND project_id = ?').get(name.trim(), pid);
     if (existing) return res.status(409).json({ error: 'Tag name already exists in this project' });
     try {
       const result = db.prepare(
         'INSERT INTO tags (name, color, project_id) VALUES (?, ?, ?)'
       ).run(name.trim(), color, pid);
-      const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(result.lastInsertRowid);
-      res.status(201).json(tag);
+      res.status(201).json(db.prepare('SELECT * FROM tags WHERE id = ?').get(result.lastInsertRowid));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -42,7 +41,6 @@ export function createTagsRouter(db) {
     const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(id);
     if (!tag) return res.status(404).json({ error: 'Tag not found' });
     const newName = name?.trim() ?? tag.name;
-    // Check name uniqueness within same project (exclude self)
     if (newName !== tag.name) {
       const conflict = db.prepare('SELECT id FROM tags WHERE name = ? AND project_id = ? AND id != ?').get(newName, tag.project_id, id);
       if (conflict) return res.status(409).json({ error: 'Tag name already exists in this project' });
@@ -57,42 +55,34 @@ export function createTagsRouter(db) {
 
   // DELETE /api/tags/:id — delete tag (cascades file_tags via FK)
   router.delete('/tags/:id', (req, res) => {
-    // Manually delete file_tags first (node:sqlite may not enforce FK cascades by default)
     db.prepare('DELETE FROM file_tags WHERE tag_id = ?').run(Number(req.params.id));
     db.prepare('DELETE FROM tags WHERE id = ?').run(Number(req.params.id));
     res.json({ deleted: true });
   });
 
-  // GET /api/files/:fileKey/tags — get tags for a file (fileKey is base64-encoded)
-  router.get('/files/:fileKey/tags', (req, res) => {
-    const fileKey = Buffer.from(req.params.fileKey, 'base64').toString();
-    const rows = db.prepare(`
-      SELECT t.* FROM tags t
-      JOIN file_tags ft ON ft.tag_id = t.id
-      WHERE ft.file_key = ?
-    `).all(fileKey);
-    res.json(rows);
-  });
-
-  // POST /api/files/:fileKey/tags — assign tag { tagId }
+  // POST /api/files/:fileKey/tags — assign tag { tagId, project_id }
+  // project_id scopes the assignment so tags don't bleed across projects.
   router.post('/files/:fileKey/tags', (req, res) => {
     const fileKey = Buffer.from(req.params.fileKey, 'base64').toString();
-    const { tagId } = req.body;
+    const { tagId, project_id } = req.body;
     if (!tagId) return res.status(400).json({ error: 'tagId required' });
+    if (!project_id) return res.status(400).json({ error: 'project_id required' });
     try {
-      db.prepare('INSERT OR IGNORE INTO file_tags (file_key, tag_id) VALUES (?, ?)').run(fileKey, tagId);
+      db.prepare('INSERT OR IGNORE INTO file_tags (file_key, project_id, tag_id) VALUES (?, ?, ?)')
+        .run(fileKey, Number(project_id), tagId);
       res.json({ assigned: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  // DELETE /api/files/:fileKey/tags/:tagId — remove tag from file
+  // DELETE /api/files/:fileKey/tags/:tagId?project_id=N — remove tag from file
   router.delete('/files/:fileKey/tags/:tagId', (req, res) => {
     const fileKey = Buffer.from(req.params.fileKey, 'base64').toString();
-    db.prepare('DELETE FROM file_tags WHERE file_key = ? AND tag_id = ?').run(
-      fileKey, Number(req.params.tagId)
-    );
+    const projectId = req.query.project_id ? Number(req.query.project_id) : null;
+    if (!projectId) return res.status(400).json({ error: 'project_id required' });
+    db.prepare('DELETE FROM file_tags WHERE file_key = ? AND project_id = ? AND tag_id = ?')
+      .run(fileKey, projectId, Number(req.params.tagId));
     res.json({ removed: true });
   });
 
