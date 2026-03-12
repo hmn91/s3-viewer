@@ -140,6 +140,24 @@ body {
   font-weight: 500;
   color: #374151;
 }
+.stat-clickable {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  transition: background 0.15s;
+}
+.stat-clickable:hover { background: #dde4ff; border-color: #a5b4fc; }
+.stat-active {
+  background: #e0e7ff;
+  color: #3730a3;
+  border-color: #818cf8;
+  font-weight: 600;
+}
+.stat-active:hover { background: #c7d2fe; }
+/* NEW badge keeps its green color even when active */
+.text-new.stat-active { background: #dcfce7; color: #15803d; border-color: #86efac; }
+.text-new.stat-active:hover { background: #bbf7d0; }
 
 /* ===== ERROR BANNER ===== */
 .error-banner {

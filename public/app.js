@@ -43,8 +43,6 @@ async function enterProject(project) {
   // Reset UI controls to match cleared state
   const searchInput = document.getElementById('global-search');
   if (searchInput) searchInput.value = '';
-  const filterNewBtn = document.getElementById('btn-filter-new');
-  if (filterNewBtn) filterNewBtn.classList.remove('btn-filter-new-active');
 
   showProjectDetailView(project);
 
@@ -192,14 +190,6 @@ function bindFileViewerEvents() {
   // Global filename search (project-scoped — state.allFiles already project-filtered)
   document.getElementById('global-search').addEventListener('input', e => {
     state.searchQuery = e.target.value;
-    renderFileList();
-    renderStats();
-  });
-
-  // NEW-only filter toggle
-  document.getElementById('btn-filter-new').addEventListener('click', () => {
-    state.filterNew = !state.filterNew;
-    document.getElementById('btn-filter-new').classList.toggle('btn-filter-new-active', state.filterNew);
     renderFileList();
     renderStats();
   });

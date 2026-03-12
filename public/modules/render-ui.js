@@ -67,18 +67,68 @@ export function renderStats() {
   statsBar.classList.remove('hidden');
 
   const visible = getVisibleFiles();
-  const newCount = visible.filter(f => f.isNew).length;
-
-  const sourceCounts = {};
-  for (const f of visible) sourceCounts[f.sourceLabel] = (sourceCounts[f.sourceLabel] || 0) + 1;
-  const sourceText = Object.entries(sourceCounts).map(([l, c]) => `${escHtml(l)}: ${c}`).join(' | ');
+  // newCount: count across all visible sources (ignore filterNew so badge always shows total new)
+  const newCount = state.allFiles.filter(f =>
+    f.isNew &&
+    (state.activeSourceIds.size === state.sources.length || state.activeSourceIds.has(f.sourceId))
+  ).length;
 
   const total = state.allFiles.length;
   const showing = visible.length;
   document.getElementById('stat-total').textContent =
     showing < total ? `Showing: ${showing} / ${total} files` : `Total: ${total} files`;
-  document.getElementById('stat-new').innerHTML = newCount ? `<span class="text-new">${newCount} NEW</span>` : '0 new';
-  document.getElementById('stat-sources').innerHTML = sourceText;
+
+  // NEW count — clickable toggle (green text, highlighted bg when active)
+  const statNew = document.getElementById('stat-new');
+  if (newCount) {
+    const active = state.filterNew;
+    statNew.innerHTML = `<span class="stat-clickable text-new${active ? ' stat-active' : ''}">${newCount} NEW</span>`;
+    statNew.querySelector('.stat-clickable').addEventListener('click', () => {
+      state.filterNew = !state.filterNew;
+      renderFileList();
+      renderStats();
+    });
+  } else {
+    statNew.textContent = '0 new';
+  }
+
+  // Source counts — per source from visible files, each clickable
+  // "isolate source" shortcut: sets activeSourceIds to just that source; click again = show all
+  const sourceCounts = {};
+  for (const f of visible) sourceCounts[f.sourceLabel] = (sourceCounts[f.sourceLabel] || 0) + 1;
+  // Also count sources that are filtered out (not visible) so they still appear in stats bar
+  const allSourceCounts = {};
+  for (const f of state.allFiles) allSourceCounts[f.sourceLabel] = (allSourceCounts[f.sourceLabel] || 0) + 1;
+
+  const statSources = document.getElementById('stat-sources');
+  statSources.innerHTML = '';
+  const allOnlyOne = state.activeSourceIds.size === 1; // dropdown is isolating one source
+
+  Object.entries(allSourceCounts).forEach(([label, totalCount], i) => {
+    if (i > 0) statSources.appendChild(document.createTextNode(' | '));
+    const span = document.createElement('span');
+    // Find source IDs for this label
+    const idsForLabel = state.sources.filter(s => s.label === label).map(s => s.id);
+    const isIsolated = allOnlyOne && idsForLabel.some(id => state.activeSourceIds.has(id));
+    const visibleCount = sourceCounts[label] || 0;
+
+    span.className = `stat-clickable${isIsolated ? ' stat-active' : ''}`;
+    span.textContent = `${label}: ${visibleCount}/${totalCount}`;
+    span.title = isIsolated ? 'Click to show all sources' : `Click to filter by "${label}"`;
+    span.addEventListener('click', () => {
+      if (isIsolated) {
+        // Toggle off: restore all sources
+        state.activeSourceIds = new Set(state.sources.map(s => s.id));
+      } else {
+        // Isolate this source
+        state.activeSourceIds = new Set(idsForLabel);
+      }
+      renderSourceDropdown();
+      renderFileList();
+      renderStats();
+    });
+    statSources.appendChild(span);
+  });
 }
 
 // Render source dropdown list items + update count badge
