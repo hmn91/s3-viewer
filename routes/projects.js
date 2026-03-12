@@ -16,7 +16,7 @@ export function createProjectsRouter(db) {
              COUNT(DISTINCT sf.key) AS file_count
       FROM projects p
       LEFT JOIN sources s  ON s.project_id = p.id
-      LEFT JOIN seen_files sf ON sf.source_url = s.url
+      LEFT JOIN seen_files sf ON sf.project_id = p.id
       GROUP BY p.id
       ORDER BY p.created_at DESC
     `).all();
@@ -59,18 +59,10 @@ export function createProjectsRouter(db) {
     const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: 'Project not found' });
 
-    // Delete tags scoped to this project (cascades file_tags via FK)
-    const tagIds = db.prepare('SELECT id FROM tags WHERE project_id = ?').all(id).map(t => t.id);
-    for (const tid of tagIds) {
-      db.prepare('DELETE FROM file_tags WHERE tag_id = ?').run(tid);
-    }
+    // Delete all project data: file_tags → tags → seen_files → sources → project
+    db.prepare('DELETE FROM file_tags WHERE project_id = ?').run(id);
     db.prepare('DELETE FROM tags WHERE project_id = ?').run(id);
-
-    // Delete seen_files linked to this project's sources, then sources, then project
-    const sourceUrls = db.prepare('SELECT url FROM sources WHERE project_id = ?').all(id).map(s => s.url);
-    for (const url of sourceUrls) {
-      db.prepare('DELETE FROM seen_files WHERE source_url = ?').run(url);
-    }
+    db.prepare('DELETE FROM seen_files WHERE project_id = ?').run(id);
     db.prepare('DELETE FROM sources WHERE project_id = ?').run(id);
     db.prepare('DELETE FROM projects WHERE id = ?').run(id);
 
@@ -101,7 +93,7 @@ export function createProjectsRouter(db) {
                COUNT(DISTINCT sf.key) AS file_count
         FROM projects p
         LEFT JOIN sources s  ON s.project_id = p.id
-        LEFT JOIN seen_files sf ON sf.source_url = s.url
+        LEFT JOIN seen_files sf ON sf.project_id = p.id
         WHERE LOWER(p.name) LIKE LOWER(?)
         GROUP BY p.id LIMIT 20
       `).all(like);
@@ -113,8 +105,8 @@ export function createProjectsRouter(db) {
                s.label AS source_label, s.project_id,
                p.name  AS project_name
         FROM seen_files sf
-        JOIN sources s ON sf.source_url = s.url
-        JOIN projects p ON s.project_id = p.id
+        JOIN sources s ON sf.source_url = s.url AND s.project_id = sf.project_id
+        JOIN projects p ON sf.project_id = p.id
         WHERE LOWER(sf.key) LIKE LOWER(?)
         ORDER BY sf.last_modified DESC LIMIT 20
       `).all(like);
