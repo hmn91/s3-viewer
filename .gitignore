@@ -5,3 +5,4 @@ data/
 *.db-wal
 plans/
 package-lock.json
+.env
