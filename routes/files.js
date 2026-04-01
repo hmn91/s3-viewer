@@ -59,13 +59,25 @@ export function createFilesRouter(db) {
     res.json(result);
   });
 
-  // GET /api/seen?project_id=N — return map { key: { sourceUrl, firstSeen, size, lastModified } }
-  // Filters by project_id so each project only sees its own seen-file records.
+  // GET /api/seen?project_id=N — return map { key: { sourceUrl, firstSeen, size, lastModified, tags, comment } }
+  // Includes tag assignments so fetch-all can preserve tags on S3-fetched files.
   router.get('/seen', (req, res) => {
     const projectId = req.query.project_id ? Number(req.query.project_id) : null;
+    const query = projectId
+      ? `SELECT sf.*, GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
+         FROM seen_files sf
+         LEFT JOIN file_tags ft ON sf.key = ft.file_key AND ft.project_id = sf.project_id
+         LEFT JOIN tags t ON ft.tag_id = t.id
+         WHERE sf.project_id = ?
+         GROUP BY sf.key`
+      : `SELECT sf.*, GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
+         FROM seen_files sf
+         LEFT JOIN file_tags ft ON sf.key = ft.file_key AND ft.project_id = sf.project_id
+         LEFT JOIN tags t ON ft.tag_id = t.id
+         GROUP BY sf.key`;
     const rows = projectId
-      ? db.prepare('SELECT * FROM seen_files WHERE project_id = ?').all(projectId)
-      : db.prepare('SELECT * FROM seen_files').all();
+      ? db.prepare(query).all(projectId)
+      : db.prepare(query).all();
     const map = {};
     for (const row of rows) {
       map[row.key] = {
@@ -73,6 +85,13 @@ export function createFilesRouter(db) {
         firstSeen: row.first_seen,
         size: row.size,
         lastModified: row.last_modified,
+        comment: row.comment || '',
+        tags: row.tags_raw
+          ? row.tags_raw.split(',').map(t => {
+              const [id, name, color] = t.split(':');
+              return { id: Number(id), name, color };
+            })
+          : [],
       };
     }
     res.json(map);

@@ -64,10 +64,15 @@ export async function fetchAll() {
     for (const f of allFiles) {
       const seenKey = `${f.sourceUrl}::${f.key}`;
       f.key = seenKey; // promote to composite key — must match seen_files.key in DB
-      if (seenMap[seenKey]) {
-        f.firstSeen = seenMap[seenKey].firstSeen;
+      const seen = seenMap[seenKey];
+      if (seen) {
+        f.firstSeen = seen.firstSeen;
+        f.tags = seen.tags || [];
+        f.comment = seen.comment || '';
       } else {
         f.firstSeen = nowIso;
+        f.tags = [];
+        f.comment = '';
         newFileEntries.push({
           key: seenKey,
           sourceUrl: f.sourceUrl,
@@ -77,7 +82,6 @@ export async function fetchAll() {
         });
       }
       f.isNew = isNewFile(f.firstSeen);
-      f.tags = f.tags || [];
     }
 
     // 5. Persist newly discovered files (scoped to current project)
