@@ -82,5 +82,8 @@ export function parseS3Xml(xmlText, source) {
     };
   });
 
-  return { files, truncated: isTruncated };
+  // Extract continuation token for pagination when results are truncated
+  const nextToken = getEl(doc, 'NextContinuationToken')?.textContent || null;
+
+  return { files, truncated: isTruncated, nextToken };
 }

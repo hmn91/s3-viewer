@@ -1,7 +1,7 @@
 // Main fetch flow: load sources, fetch S3 XML, parse, detect new files, render
 
 import { state } from './state.js';
-import { apiFetchSources, apiProxyFetch, apiGetSeen, apiSaveSeen } from './api.js';
+import { apiFetchSources, apiProxyFetchPaginated, apiGetSeen, apiSaveSeen } from './api.js';
 import { apiUpdateLastFetch } from './project-api.js';
 import { parseS3Xml } from './parse.js';
 import { isNewFile } from './sort-filter.js';
@@ -29,37 +29,32 @@ export async function fetchAll() {
       return;
     }
 
-    // 2. Fetch all S3 XMLs in parallel (allSettled — one failure won't block others)
-    // Attach sourceUrl to rejection so error attribution works per-source
-    const results = await Promise.allSettled(
-      sources.map(s =>
-        apiProxyFetch(s.url)
-          .then(xml => ({ source: s, xml }))
-          .catch(err => Promise.reject(Object.assign(err, { sourceUrl: s.url })))
-      )
-    );
-
-    // 3. Parse results, collect all files
+    // 2. Fetch all S3 listings with pagination (allSettled — one failure won't block others)
     const allFiles = [];
     const nowIso = new Date().toISOString();
 
-    for (const result of results) {
-      if (result.status === 'rejected') {
-        const err = result.reason;
-        const label = err?.sourceUrl || 'unknown';
+    const results = await Promise.allSettled(
+      sources.map(async (source) => {
+        let continuationToken = null;
+        let pageCount = 0;
+        do {
+          const xml = await apiProxyFetchPaginated(source.url, continuationToken);
+          const { files, truncated, nextToken } = parseS3Xml(xml, source);
+          allFiles.push(...files);
+          continuationToken = truncated ? nextToken : null;
+          pageCount++;
+          if (pageCount > 100) break; // safety limit
+        } while (continuationToken);
+      })
+    );
+
+    // 3. Collect errors
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].status === 'rejected') {
+        const err = results[i].reason;
+        const label = sources[i]?.url || 'unknown';
         state.fetchErrors[label] = err?.message || 'Unknown error';
         console.error(`Fetch failed [${label}]:`, err?.message);
-        continue;
-      }
-      const { source, xml } = result.value;
-      try {
-        const { files, truncated } = parseS3Xml(xml, source);
-        if (truncated) {
-          state.fetchErrors[source.url] = 'Results truncated (>1000 files)';
-        }
-        allFiles.push(...files);
-      } catch (err) {
-        state.fetchErrors[source.url] = 'Parse error: ' + err.message;
       }
     }
 

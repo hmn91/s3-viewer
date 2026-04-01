@@ -46,6 +46,15 @@ export async function apiProxyFetch(url) {
   return res.text();
 }
 
+// Fetch S3 listing with pagination support (appends continuation-token for subsequent pages)
+export async function apiProxyFetchPaginated(baseUrl, continuationToken) {
+  const sep = baseUrl.includes('?') ? '&' : '?';
+  const url = continuationToken
+    ? `${baseUrl}${sep}continuation-token=${encodeURIComponent(continuationToken)}`
+    : baseUrl;
+  return apiProxyFetch(url);
+}
+
 export async function apiGetFiles(projectId) {
   const url = projectId ? `/api/files?project_id=${projectId}` : '/api/files';
   const res = await fetch(url);
