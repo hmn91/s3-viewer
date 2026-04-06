@@ -35,16 +35,22 @@ export async function fetchAll() {
 
     const results = await Promise.allSettled(
       sources.map(async (source) => {
-        let continuationToken = null;
+        let paginationParams = {};
         let pageCount = 0;
         do {
-          const xml = await apiProxyFetchPaginated(source.url, continuationToken);
-          const { files, truncated, nextToken } = parseS3Xml(xml, source);
+          const xml = await apiProxyFetchPaginated(source.url, paginationParams);
+          const { files, truncated, nextToken, nextMarker, isV2 } = parseS3Xml(xml, source);
           allFiles.push(...files);
-          continuationToken = truncated ? nextToken : null;
+          if (truncated) {
+            paginationParams = isV2 && nextToken
+              ? { continuationToken: nextToken }
+              : nextMarker ? { marker: nextMarker } : {};
+          } else {
+            paginationParams = {};
+          }
           pageCount++;
           if (pageCount > 100) break; // safety limit
-        } while (continuationToken);
+        } while (Object.keys(paginationParams).length > 0);
       })
     );
 

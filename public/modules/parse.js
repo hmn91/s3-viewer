@@ -82,8 +82,19 @@ export function parseS3Xml(xmlText, source) {
     };
   });
 
-  // Extract continuation token for pagination when results are truncated
-  const nextToken = getEl(doc, 'NextContinuationToken')?.textContent || null;
+  // Support both ListObjectsV2 (NextContinuationToken) and v1 (NextMarker / last key)
+  const nextContinuationToken = getEl(doc, 'NextContinuationToken')?.textContent || null;
+  const nextMarker = getEl(doc, 'NextMarker')?.textContent || null;
+  // v1 fallback: use last key as marker when NextMarker is absent
+  const lastKey = files.length > 0 ? files[files.length - 1].key : null;
+  // Detect API version: presence of KeyCount or ContinuationToken means v2
+  const isV2 = !!getEl(doc, 'KeyCount') || !!getEl(doc, 'NextContinuationToken');
 
-  return { files, truncated: isTruncated, nextToken };
+  return {
+    files,
+    truncated: isTruncated,
+    nextToken: nextContinuationToken,
+    nextMarker: nextMarker || (isTruncated && !isV2 ? lastKey : null),
+    isV2,
+  };
 }

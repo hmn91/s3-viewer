@@ -46,12 +46,15 @@ export async function apiProxyFetch(url) {
   return res.text();
 }
 
-// Fetch S3 listing with pagination support (appends continuation-token for subsequent pages)
-export async function apiProxyFetchPaginated(baseUrl, continuationToken) {
+// Fetch S3 listing with pagination (supports both v1 marker and v2 continuation-token)
+export async function apiProxyFetchPaginated(baseUrl, { continuationToken, marker } = {}) {
   const sep = baseUrl.includes('?') ? '&' : '?';
-  const url = continuationToken
-    ? `${baseUrl}${sep}continuation-token=${encodeURIComponent(continuationToken)}`
-    : baseUrl;
+  let url = baseUrl;
+  if (continuationToken) {
+    url += `${sep}continuation-token=${encodeURIComponent(continuationToken)}`;
+  } else if (marker) {
+    url += `${sep}marker=${encodeURIComponent(marker)}`;
+  }
   return apiProxyFetch(url);
 }
 

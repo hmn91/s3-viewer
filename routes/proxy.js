@@ -21,7 +21,7 @@ export function createProxyRouter() {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 30000);
     try {
       const response = await fetch(targetUrl, { signal: controller.signal });
       const text = await response.text();
