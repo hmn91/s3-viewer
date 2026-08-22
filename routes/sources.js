@@ -62,11 +62,24 @@ export function createSourcesRouter(db) {
     }
 
     try {
-      db.prepare('UPDATE sources SET label = ?, url = ? WHERE id = ?').run(label, url, id);
+      // A changed URL represents a different listing, so ask again at 100 pages.
+      const allowFetchBeyond100 = url === existing.url ? existing.allow_fetch_beyond_100 : 0;
+      db.prepare('UPDATE sources SET label = ?, url = ?, allow_fetch_beyond_100 = ? WHERE id = ?')
+        .run(label, url, allowFetchBeyond100, id);
       res.json(db.prepare('SELECT * FROM sources WHERE id = ?').get(id));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // PATCH /api/sources/:id/fetch-limit -- remember approval to fetch beyond 100 pages
+  router.patch('/sources/:id/fetch-limit', (req, res) => {
+    const id = Number(req.params.id);
+    const existing = db.prepare('SELECT * FROM sources WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: 'Source not found' });
+
+    db.prepare('UPDATE sources SET allow_fetch_beyond_100 = 1 WHERE id = ?').run(id);
+    res.json(db.prepare('SELECT * FROM sources WHERE id = ?').get(id));
   });
 
   // DELETE /api/sources/:id — delete source

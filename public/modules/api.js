@@ -1,8 +1,8 @@
 // API wrapper functions for all backend endpoints
 
-export async function apiFetchSources(projectId) {
+export async function apiFetchSources(projectId, signal) {
   const url = projectId ? `/api/sources?project_id=${projectId}` : '/api/sources';
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error('Failed to load sources');
   return res.json();
 }
@@ -37,8 +37,15 @@ export async function apiDeleteSource(id) {
   }
 }
 
-export async function apiProxyFetch(url) {
-  const res = await fetch(`/api/fetch?url=${encodeURIComponent(url)}`);
+export async function apiAllowFetchBeyondLimit(id) {
+  const res = await fetch(`/api/sources/${id}/fetch-limit`, { method: 'PATCH' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to save fetch-limit preference');
+  return data;
+}
+
+export async function apiProxyFetch(url, signal) {
+  const res = await fetch(`/api/fetch?url=${encodeURIComponent(url)}`, { signal });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `HTTP ${res.status}`);
@@ -47,7 +54,7 @@ export async function apiProxyFetch(url) {
 }
 
 // Fetch S3 listing with pagination (supports both v1 marker and v2 continuation-token)
-export async function apiProxyFetchPaginated(baseUrl, { continuationToken, marker } = {}) {
+export async function apiProxyFetchPaginated(baseUrl, { continuationToken, marker } = {}, signal) {
   const sep = baseUrl.includes('?') ? '&' : '?';
   let url = baseUrl;
   if (continuationToken) {
@@ -55,7 +62,7 @@ export async function apiProxyFetchPaginated(baseUrl, { continuationToken, marke
   } else if (marker) {
     url += `${sep}marker=${encodeURIComponent(marker)}`;
   }
-  return apiProxyFetch(url);
+  return apiProxyFetch(url, signal);
 }
 
 export async function apiGetFiles(projectId) {
@@ -65,10 +72,10 @@ export async function apiGetFiles(projectId) {
   return res.json();
 }
 
-export async function apiGetSeen(projectId) {
+export async function apiGetSeen(projectId, signal) {
   // seen map is used for fetch-all dedup; we filter by project via the sources already loaded
   const url = projectId ? `/api/seen?project_id=${projectId}` : '/api/seen';
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error('Failed to load seen files');
   return res.json();
 }

@@ -54,6 +54,7 @@ db.exec(`
     url        TEXT NOT NULL,
     project_id INTEGER NOT NULL,
     created_at TEXT DEFAULT (datetime('now')),
+    allow_fetch_beyond_100 INTEGER NOT NULL DEFAULT 0,
     UNIQUE(url, project_id),
     FOREIGN KEY (project_id) REFERENCES projects(id)
   );
@@ -100,6 +101,12 @@ db.exec(`
 const sfCols = db.prepare("PRAGMA table_info(seen_files)").all();
 if (!sfCols.some(c => c.name === 'comment')) {
   db.exec("ALTER TABLE seen_files ADD COLUMN comment TEXT");
+}
+
+// Persist approval to fetch beyond the safety threshold per source/project.
+const sourceCols = db.prepare("PRAGMA table_info(sources)").all();
+if (!sourceCols.some(c => c.name === 'allow_fetch_beyond_100')) {
+  db.exec("ALTER TABLE sources ADD COLUMN allow_fetch_beyond_100 INTEGER NOT NULL DEFAULT 0");
 }
 
 // === MIDDLEWARE ===

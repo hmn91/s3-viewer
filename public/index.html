@@ -52,6 +52,7 @@
   <div class="toolbar">
     <div class="toolbar-left">
       <button id="btn-fetch-all" class="btn btn-primary">⬇ Fetch All</button>
+      <button id="btn-stop-fetch" class="btn btn-danger hidden">Stop</button>
       <button id="btn-show-hidden" class="btn btn-secondary hidden">Show hidden (<span id="hidden-count">0</span>)</button>
 
       <!-- Source multi-select dropdown (Excel-like) -->
@@ -98,6 +99,16 @@
     <div class="toolbar-right">
       <input id="global-search" type="search" placeholder="🔍 Search…" class="global-search-input" />
       <span id="last-fetch-label" class="muted-text">Not fetched yet</span>
+    </div>
+  </div>
+
+  <!-- ===== FETCH PROGRESS ===== -->
+  <div id="fetch-progress" class="fetch-progress hidden" role="status" aria-live="polite">
+    <div class="fetch-progress-row">
+      <span id="fetch-progress-label">Preparing fetch...</span>
+    </div>
+    <div class="fetch-progress-track" aria-hidden="true">
+      <div id="fetch-progress-fill" class="fetch-progress-fill"></div>
     </div>
   </div>
 
@@ -156,6 +167,25 @@
         </div>
         <div id="add-tag-error" class="form-error hidden"></div>
         <div id="tags-list" class="tags-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== LARGE LISTING CONFIRMATION ===== -->
+  <div id="fetch-limit-modal" class="modal-overlay hidden">
+    <div class="modal fetch-limit-modal" role="dialog" aria-modal="true" aria-labelledby="fetch-limit-title">
+      <div class="modal-header">
+        <h2 id="fetch-limit-title">Large S3 listing detected</h2>
+      </div>
+      <div class="modal-body">
+        <p><strong id="fetch-limit-source-label"></strong> has reached 100 listing pages.</p>
+        <p id="fetch-limit-details" class="muted-text"></p>
+        <p>Please check whether pagination is looping incorrectly or this source genuinely contains a large number of objects.</p>
+        <div class="fetch-limit-actions">
+          <button id="btn-stop-all-from-limit" class="btn btn-danger">Stop entire fetch</button>
+          <button id="btn-stop-large-source" class="btn btn-secondary">Stop this source</button>
+          <button id="btn-continue-large-source" class="btn btn-primary">Continue and don't ask again</button>
+        </div>
       </div>
     </div>
   </div>

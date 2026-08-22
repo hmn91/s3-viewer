@@ -11,6 +11,7 @@ Localhost web app to browse, tag, and manage files from S3-compatible public buc
 - **Hide/unhide** — suppress files from the listing without deleting records
 - **Global search** — search across projects, files, sources, and tags
 - **CORS proxy** — built-in proxy route to bypass browser CORS when fetching S3 XML
+- **Fetch progress & safe stopping** — live object/page counts, cancellable fetches, and a persisted confirmation for listings over 100 pages
 
 ## Requirements
 
@@ -68,6 +69,7 @@ s3-viewer/
 | PATCH | `/api/projects/:id/last-fetch` | Update last fetch timestamp |
 | GET | `/api/search?q=&type=` | Global search |
 | GET/POST/PUT/DELETE | `/api/sources` | S3 source URL management |
+| PATCH | `/api/sources/:id/fetch-limit` | Remember approval to fetch beyond 100 listing pages |
 | GET | `/api/files?project_id=N` | List files with tags |
 | GET/POST | `/api/seen` | Seen-files map (used by fetch flow) |
 | PUT | `/api/files/:key/comment` | Save comment |

@@ -7,7 +7,7 @@ import { apiGetTags } from './modules/api-tags.js';
 import { apiGetProjects } from './modules/project-api.js';
 import { renderFileList, renderStats, renderSourceDropdown, renderTagFilter } from './modules/render-ui.js';
 import { openModal, closeModal, addSource } from './modules/sources-modal.js';
-import { fetchAll } from './modules/fetch-all.js';
+import { fetchAll, stopFetch } from './modules/fetch-all.js';
 import { dbRowToFile } from './modules/parse.js';
 import { openTagModal, closeTagModal } from './modules/tags-modal.js';
 import { openTagPicker, closeAllTagPickers } from './modules/file-tag-ui.js';
@@ -156,6 +156,7 @@ function bindFileViewerEvents() {
 
   // Fetch all
   document.getElementById('btn-fetch-all').addEventListener('click', fetchAll);
+  document.getElementById('btn-stop-fetch').addEventListener('click', stopFetch);
 
   // View mode radio buttons
   document.querySelectorAll('input[name="view-mode"]').forEach(radio => {

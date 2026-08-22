@@ -114,6 +114,47 @@ body {
 }
 .radio-label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text); }
 
+/* ===== FETCH PROGRESS ===== */
+.fetch-progress {
+  padding: 8px 20px 10px;
+  background: #eef6ff;
+  border-bottom: 1px solid #bfdbfe;
+  color: #1e3a5f;
+  font-size: 13px;
+}
+.fetch-progress-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fetch-progress-track {
+  height: 4px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dbeafe;
+}
+.fetch-progress-fill {
+  width: 35%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  animation: fetch-progress-indeterminate 1.2s ease-in-out infinite alternate;
+}
+.fetch-progress.complete .fetch-progress-fill,
+.fetch-progress.stopped .fetch-progress-fill,
+.fetch-progress.failed .fetch-progress-fill {
+  width: 100%;
+  animation: none;
+}
+.fetch-progress.complete { background: #ecfdf3; border-color: #86efac; color: #166534; }
+.fetch-progress.stopped { background: var(--warning-bg); border-color: var(--warning-border); color: #7c5700; }
+.fetch-progress.failed { background: var(--error-bg); border-color: var(--error-border); color: #991b1b; }
+@keyframes fetch-progress-indeterminate {
+  from { transform: translateX(-20%); }
+  to { transform: translateX(205%); }
+}
+
+.fetch-limit-modal { max-width: 620px; }
+.fetch-limit-modal .modal-body { line-height: 1.5; }
+.fetch-limit-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
 /* ===== SOURCE FILTER ===== */
 .source-filter {
   display: flex;
