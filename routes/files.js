@@ -160,6 +160,30 @@ export function createFilesRouter(db) {
     }
   });
 
+  // POST /api/hidden/batch -- hide many fetched files in one transaction
+  router.post('/hidden/batch', (req, res) => {
+    const { project_id, file_keys } = req.body;
+    if (!project_id) return res.status(400).json({ error: 'project_id required' });
+    if (!Array.isArray(file_keys)) return res.status(400).json({ error: 'file_keys array required' });
+
+    const projectId = Number(project_id);
+    const keys = [...new Set(file_keys.filter(key => typeof key === 'string' && key.length > 0))];
+    const insert = db.prepare(
+      'INSERT OR IGNORE INTO hidden_files (file_key, project_id) VALUES (?, ?)'
+    );
+    let inserted = 0;
+
+    db.exec('BEGIN');
+    try {
+      for (const key of keys) inserted += insert.run(key, projectId).changes;
+      db.exec('COMMIT');
+      res.json({ hidden: keys.length, inserted });
+    } catch (err) {
+      db.exec('ROLLBACK');
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // DELETE /api/files/:fileKey/hide?project_id=N — unhide a file
   router.delete('/files/:fileKey/hide', (req, res) => {
     const fileKey = decodeFileKey(req.params.fileKey);

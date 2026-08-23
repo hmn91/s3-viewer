@@ -14,6 +14,7 @@ export const state = {
   sourceSearch: '',    // source dropdown search input
   tagSearch: '',       // tag filter dropdown search input
   tags: [],            // [{ id, name, color }] — all available tags
+  blacklistRules: [],  // [{ id, rule_type, value, project_id }]
   activeTagIds: new Set(), // tag IDs selected in tag filter
   filterNoTag: false,  // if true, include files with no tags in tag filter results
   filterNew: false,    // if true, show only NEW files

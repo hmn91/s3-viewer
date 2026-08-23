@@ -127,6 +127,17 @@ export async function apiHideFile(fileKey, projectId) {
   }
 }
 
+export async function apiBatchHideFiles(fileKeys, projectId) {
+  const res = await fetch('/api/hidden/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_keys: fileKeys, project_id: projectId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to hide blacklisted files');
+  return data;
+}
+
 export async function apiUnhideFile(fileKey, projectId) {
   const encoded = encodeFileKey(fileKey);
   const res = await fetch(`/api/files/${encoded}/hide?project_id=${projectId}`, { method: 'DELETE' });

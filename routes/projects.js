@@ -59,8 +59,10 @@ export function createProjectsRouter(db) {
     const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: 'Project not found' });
 
-    // Delete all project data: file_tags → tags → seen_files → sources → project
+    // Delete all project-scoped data before deleting the project row.
     db.prepare('DELETE FROM file_tags WHERE project_id = ?').run(id);
+    db.prepare('DELETE FROM blacklist_rules WHERE project_id = ?').run(id);
+    db.prepare('DELETE FROM hidden_files WHERE project_id = ?').run(id);
     db.prepare('DELETE FROM tags WHERE project_id = ?').run(id);
     db.prepare('DELETE FROM seen_files WHERE project_id = ?').run(id);
     db.prepare('DELETE FROM sources WHERE project_id = ?').run(id);

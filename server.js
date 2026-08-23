@@ -9,6 +9,7 @@ import { createFilesRouter } from './routes/files.js';
 import { createProxyRouter } from './routes/proxy.js';
 import { createTagsRouter } from './routes/tags.js';
 import { createProjectsRouter } from './routes/projects.js';
+import { createBlacklistRouter } from './routes/blacklist.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -94,6 +95,16 @@ db.exec(`
     PRIMARY KEY (file_key, project_id),
     FOREIGN KEY (project_id) REFERENCES projects(id)
   );
+
+  CREATE TABLE IF NOT EXISTS blacklist_rules (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_type  TEXT NOT NULL CHECK (rule_type IN ('file_type', 'url_prefix', 'url_suffix')),
+    value      TEXT NOT NULL,
+    project_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(rule_type, value, project_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  );
 `);
 
 // === MIGRATIONS ===
@@ -119,6 +130,7 @@ app.use('/api', createProjectsRouter(db));
 app.use('/api', createSourcesRouter(db));
 app.use('/api', createFilesRouter(db));
 app.use('/api', createTagsRouter(db));
+app.use('/api', createBlacklistRouter(db));
 app.use('/api', createProxyRouter());
 
 // === FALLBACK SPA ===

@@ -5,6 +5,7 @@ import { state } from './modules/state.js';
 import { apiFetchSources, apiGetFiles, apiGetHiddenKeys, apiHideFile, apiUnhideFile, apiUpdateComment } from './modules/api.js';
 import { apiGetTags } from './modules/api-tags.js';
 import { apiGetProjects } from './modules/project-api.js';
+import { apiGetBlacklistRules } from './modules/api-blacklist.js';
 import { renderFileList, renderStats, renderSourceDropdown, renderTagFilter } from './modules/render-ui.js';
 import { openModal, closeModal, addSource } from './modules/sources-modal.js';
 import { fetchAll, stopFetch } from './modules/fetch-all.js';
@@ -17,6 +18,13 @@ import {
   renderProjectList, bindNewProjectButton, setProjectSelectHandler,
 } from './modules/project-list-view.js';
 import { bindProjectSearch, clearSearchResults } from './modules/project-search-ui.js';
+import {
+  addBlacklistRule,
+  closeBlacklistModal,
+  openBlacklistModal,
+  updateBlacklistHelp,
+} from './modules/blacklist-modal.js';
+import { updateHiddenButton } from './modules/hidden-ui.js';
 
 // =====================================================================
 // PROJECT NAVIGATION
@@ -30,6 +38,7 @@ async function enterProject(project) {
   state.sources = [];
   state.allFiles = [];
   state.tags = [];
+  state.blacklistRules = [];
   state.seenMap = {};
   state.activeSourceIds = new Set();
   state.activeTagIds = new Set();
@@ -64,11 +73,12 @@ async function enterProject(project) {
 
   // Load project-scoped data
   try {
-    const [sources, dbRows, tags, hiddenKeys] = await Promise.all([
+    const [sources, dbRows, tags, hiddenKeys, blacklistRules] = await Promise.all([
       apiFetchSources(project.id),
       apiGetFiles(project.id),
       apiGetTags(project.id),
       apiGetHiddenKeys(project.id),
+      apiGetBlacklistRules(project.id),
     ]);
 
     state.sources = sources;
@@ -78,11 +88,11 @@ async function enterProject(project) {
     state.activeTagIds = new Set(tags.map(t => t.id));
     state.filterNoTag = true;
     state.hiddenKeys = new Set(hiddenKeys);
+    state.blacklistRules = blacklistRules;
 
     if (dbRows.length > 0) {
       state.allFiles = dbRows.map(dbRowToFile);
       state.allFiles.forEach(f => { f.isHidden = state.hiddenKeys.has(f.key); });
-      updateHiddenButton();
       renderFileList();
       renderStats();
     } else {
@@ -91,6 +101,7 @@ async function enterProject(project) {
       document.getElementById('stats-bar').classList.add('hidden');
     }
 
+    updateHiddenButton();
     renderSourceDropdown();
     renderTagFilter();
   } catch (err) {
@@ -127,14 +138,6 @@ function highlightFileRow(fileKey) {
   });
 }
 
-function updateHiddenButton() {
-  const count = state.hiddenKeys.size;
-  const btn = document.getElementById('btn-show-hidden');
-  document.getElementById('hidden-count').textContent = count;
-  btn.classList.toggle('hidden', count === 0);
-  btn.classList.toggle('btn-filter-new-active', state.showHidden);
-}
-
 // =====================================================================
 // FILE VIEWER EVENT BINDINGS (bound once, work inside #view-project-detail)
 // =====================================================================
@@ -157,6 +160,18 @@ function bindFileViewerEvents() {
   // Fetch all
   document.getElementById('btn-fetch-all').addEventListener('click', fetchAll);
   document.getElementById('btn-stop-fetch').addEventListener('click', stopFetch);
+
+  // Blacklist manager
+  document.getElementById('btn-manage-blacklist').addEventListener('click', openBlacklistModal);
+  document.getElementById('btn-close-blacklist-modal').addEventListener('click', closeBlacklistModal);
+  document.getElementById('blacklist-modal-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('blacklist-modal-overlay')) closeBlacklistModal();
+  });
+  document.getElementById('blacklist-rule-type').addEventListener('change', updateBlacklistHelp);
+  document.getElementById('btn-add-blacklist-rule').addEventListener('click', addBlacklistRule);
+  document.getElementById('blacklist-value').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addBlacklistRule();
+  });
 
   // View mode radio buttons
   document.querySelectorAll('input[name="view-mode"]').forEach(radio => {
@@ -343,7 +358,7 @@ function bindFileViewerEvents() {
 
   // Close modals on Escape
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeModal(); closeTagModal(); }
+    if (e.key === 'Escape') { closeModal(); closeTagModal(); closeBlacklistModal(); }
   });
 }
 

@@ -40,6 +40,7 @@
       <h1 class="header-title" id="project-detail-title">Project</h1>
     </div>
     <div class="header-actions">
+      <button id="btn-manage-blacklist" class="btn btn-secondary">Blacklist</button>
       <button id="btn-manage-tags" class="btn btn-secondary">🏷 Tags</button>
       <button id="btn-manage-sources" class="btn btn-secondary">⚙ Manage Sources</button>
     </div>
@@ -167,6 +168,31 @@
         </div>
         <div id="add-tag-error" class="form-error hidden"></div>
         <div id="tags-list" class="tags-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== BLACKLIST MANAGER MODAL ===== -->
+  <div id="blacklist-modal-overlay" class="modal-overlay hidden">
+    <div class="modal blacklist-modal">
+      <div class="modal-header">
+        <h2>Automatic Hide Blacklist</h2>
+        <button id="btn-close-blacklist-modal" class="btn-icon" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted-text">Matching files are automatically added to Hidden during the next Fetch All. Deleting a rule does not unhide files that were already matched.</p>
+        <div class="blacklist-rule-form">
+          <select id="blacklist-rule-type" class="select-control">
+            <option value="file_type">File extension</option>
+            <option value="url_prefix">URL prefix</option>
+            <option value="url_suffix">URL suffix</option>
+          </select>
+          <input id="blacklist-value" type="text" class="input-control" placeholder="e.g. pdf or .tmp" />
+          <button id="btn-add-blacklist-rule" class="btn btn-primary" type="button">Add Rule</button>
+        </div>
+        <div id="blacklist-rule-help" class="blacklist-rule-help muted-text"></div>
+        <div id="blacklist-error" class="form-error hidden"></div>
+        <div id="blacklist-rules-list" class="blacklist-rules-list"></div>
       </div>
     </div>
   </div>
