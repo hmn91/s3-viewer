@@ -234,6 +234,7 @@ async function toggleTag(tag, file, assignedIds) {
       await apiRemoveTag(file.key, tag.id, projectId);
       file.tags = (file.tags || []).filter(t => t.id !== tag.id);
       assignedIds.delete(tag.id);
+      tag.usage_count = Math.max(0, Number(tag.usage_count || 0) - 1);
       updateFileRowTags(file);
     } catch (err) { console.error('Remove tag failed:', err); }
   } else {
@@ -244,6 +245,7 @@ async function toggleTag(tag, file, assignedIds) {
         file.tags.push({ id: tag.id, name: tag.name, color: tag.color });
       }
       assignedIds.add(tag.id);
+      tag.usage_count = Number(tag.usage_count || 0) + 1;
       addRecent(tag.id);
       updateFileRowTags(file);
     } catch (err) { console.error('Assign tag failed:', err); }
@@ -255,6 +257,7 @@ async function createAndAssign(name, file, assignedIds) {
     const color = PRESET_COLORS[colorIdx % PRESET_COLORS.length];
     colorIdx++;
     const newTag = await apiCreateTag(name, color, state.currentProject?.id);
+    newTag.usage_count = 0;
     state.tags.push(newTag);
     renderTagFilter();
     await toggleTag(newTag, file, assignedIds);

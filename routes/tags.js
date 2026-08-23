@@ -18,8 +18,21 @@ export function createTagsRouter(db) {
   router.get('/tags', (req, res) => {
     const projectId = req.query.project_id ? Number(req.query.project_id) : null;
     const rows = projectId
-      ? db.prepare('SELECT * FROM tags WHERE project_id = ? ORDER BY name').all(projectId)
-      : db.prepare('SELECT * FROM tags ORDER BY name').all();
+      ? db.prepare(`
+          SELECT t.*, COUNT(ft.file_key) AS usage_count
+          FROM tags t
+          LEFT JOIN file_tags ft ON ft.tag_id = t.id AND ft.project_id = t.project_id
+          WHERE t.project_id = ?
+          GROUP BY t.id
+          ORDER BY t.name
+        `).all(projectId)
+      : db.prepare(`
+          SELECT t.*, COUNT(ft.file_key) AS usage_count
+          FROM tags t
+          LEFT JOIN file_tags ft ON ft.tag_id = t.id AND ft.project_id = t.project_id
+          GROUP BY t.id
+          ORDER BY t.name
+        `).all();
     res.json(rows);
   });
 

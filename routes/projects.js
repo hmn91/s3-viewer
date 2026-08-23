@@ -1,6 +1,6 @@
 // Projects CRUD routes + global search
 // GET/POST/PUT/DELETE /api/projects
-// PATCH /api/projects/:id/last-fetch
+// PATCH /api/projects/:id/last-fetch, PATCH /api/projects/:id/file-page-size
 // GET /api/search?q=&type=
 
 import { Router } from 'express';
@@ -11,7 +11,7 @@ export function createProjectsRouter(db) {
   // GET /api/projects — list all projects with aggregated source_count and file_count
   router.get('/projects', (_req, res) => {
     const rows = db.prepare(`
-      SELECT p.id, p.name, p.created_at, p.last_fetch_at,
+      SELECT p.id, p.name, p.created_at, p.last_fetch_at, p.file_page_size,
              COUNT(DISTINCT s.id)   AS source_count,
              COUNT(DISTINCT sf.key) AS file_count
       FROM projects p
@@ -79,6 +79,19 @@ export function createProjectsRouter(db) {
     res.json({ last_fetch_at: now });
   });
 
+  // PATCH /api/projects/:id/file-page-size — persist 20, 50, or 100 rows per page.
+  router.patch('/projects/:id/file-page-size', (req, res) => {
+    const id = Number(req.params.id);
+    const filePageSize = Number(req.body.file_page_size);
+    if (![20, 50, 100].includes(filePageSize)) {
+      return res.status(400).json({ error: 'file_page_size must be one of 20, 50, or 100' });
+    }
+    const result = db.prepare('UPDATE projects SET file_page_size = ? WHERE id = ?')
+      .run(filePageSize, id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Project not found' });
+    res.json({ file_page_size: filePageSize });
+  });
+
   // GET /api/search?q=&type=all|project|file|source|tag
   router.get('/search', (req, res) => {
     const q = (req.query.q || '').trim();
@@ -90,7 +103,7 @@ export function createProjectsRouter(db) {
 
     if (type === 'all' || type === 'project') {
       result.projects = db.prepare(`
-        SELECT p.id, p.name, p.created_at, p.last_fetch_at,
+        SELECT p.id, p.name, p.created_at, p.last_fetch_at, p.file_page_size,
                COUNT(DISTINCT s.id)   AS source_count,
                COUNT(DISTINCT sf.key) AS file_count
         FROM projects p

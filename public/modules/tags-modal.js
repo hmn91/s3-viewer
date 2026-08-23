@@ -2,7 +2,7 @@
 
 import { state } from './state.js';
 import { apiCreateTag, apiUpdateTag, apiDeleteTag } from './api-tags.js';
-import { renderTagFilter, renderFileList } from './render-ui.js';
+import { renderTagFilter } from './render-ui.js';
 import { escHtml } from './utils.js';
 
 const PRESET_COLORS = [
@@ -53,9 +53,7 @@ function renderTagList() {
   }
 
   for (const tag of state.tags) {
-    const usageCount = state.allFiles.filter(f =>
-      f.tags && f.tags.some(t => t.id === tag.id)
-    ).length;
+    const usageCount = tag.usage_count ?? 0;
 
     const row = document.createElement('div');
     row.className = 'tag-row';
@@ -112,14 +110,14 @@ function startEdit(row, tag) {
     try {
       const updated = await apiUpdateTag(tag.id, newName, editColor);
       const idx = state.tags.findIndex(t => t.id === tag.id);
-      if (idx !== -1) state.tags[idx] = updated;
+      if (idx !== -1) state.tags[idx] = { ...updated, usage_count: state.tags[idx].usage_count || 0 };
       // Sync tag data in allFiles
       state.allFiles.forEach(f => {
         if (f.tags) f.tags = f.tags.map(t => t.id === updated.id ? updated : t);
       });
       renderTagList();
       renderTagFilter();
-      renderFileList(); // refresh tag badges in file rows
+      document.dispatchEvent(new CustomEvent('file-filters-changed'));
     } catch (err) {
       showError(err.message);
     }
@@ -141,7 +139,7 @@ async function deleteTag(tag, usageCount) {
     });
     renderTagList();
     renderTagFilter();
-    renderFileList(); // refresh tag badges + remove deleted tag from file rows
+    document.dispatchEvent(new CustomEvent('file-filters-changed'));
   } catch (err) {
     showError(err.message);
   }

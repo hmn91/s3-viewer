@@ -118,9 +118,24 @@
 
   <!-- ===== STATS BAR ===== -->
   <div id="stats-bar" class="stats-bar hidden">
-    <span id="stat-total"></span>
-    <span id="stat-new"></span>
-    <span id="stat-sources"></span>
+    <div class="stats-bar-left">
+      <span id="stat-total"></span>
+      <span id="stat-new"></span>
+      <span id="stat-sources"></span>
+    </div>
+    <div id="file-pagination" class="file-pagination hidden">
+      <label class="file-page-size-label">
+        Items per page
+        <select id="file-page-size" class="select-control">
+          <option value="20">20</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+      </label>
+      <button id="btn-file-page-prev" class="btn btn-sm btn-secondary">← Previous</button>
+      <span id="file-page-summary" class="muted-text">Page 1 of 1</span>
+      <button id="btn-file-page-next" class="btn btn-sm btn-secondary">Next →</button>
+    </div>
   </div>
 
   </div><!-- end .sticky-subheader -->

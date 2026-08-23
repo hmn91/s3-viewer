@@ -9,11 +9,11 @@ export function renderFileList() {
   const main = document.getElementById('main-content');
   const visibleFiles = getVisibleFiles();
 
-  if (state.allFiles.length === 0) {
+  if (state.projectFileTotal === 0) {
     main.innerHTML = '<div class="empty-state">No files. Add sources and click ⬇ Fetch All.</div>';
     return;
   }
-  if (visibleFiles.length === 0) {
+  if (state.fileTotal === 0 || visibleFiles.length === 0) {
     main.innerHTML = '<div class="empty-state">No files match the current filter.</div>';
     return;
   }
@@ -63,30 +63,26 @@ export function renderFileList() {
 
 export function renderStats() {
   const statsBar = document.getElementById('stats-bar');
-  if (state.allFiles.length === 0) { statsBar.classList.add('hidden'); return; }
+  if (state.projectFileTotal === 0) { statsBar.classList.add('hidden'); return; }
   statsBar.classList.remove('hidden');
 
   const visible = getVisibleFiles();
-  // newCount: count across all visible sources (ignore filterNew so badge always shows total new)
-  const newCount = state.allFiles.filter(f =>
-    f.isNew &&
-    (state.activeSourceIds.size === state.sources.length || state.activeSourceIds.has(f.sourceId))
-  ).length;
+  // Server count spans every page and intentionally ignores filterNew itself.
+  const newCount = state.newCount;
 
-  const total = state.allFiles.length;
-  const showing = visible.length;
+  const firstItem = state.fileTotal === 0 ? 0 : (state.filePage - 1) * state.filePageSize + 1;
+  const lastItem = state.fileTotal === 0 ? 0 : firstItem + visible.length - 1;
   document.getElementById('stat-total').textContent =
-    showing < total ? `Showing: ${showing} / ${total} files` : `Total: ${total} files`;
+    `Showing: ${firstItem}-${lastItem} / ${state.fileTotal} files`;
 
   // NEW count — clickable toggle (green text, highlighted bg when active)
   const statNew = document.getElementById('stat-new');
-  if (newCount) {
+  if (newCount || state.filterNew) {
     const active = state.filterNew;
     statNew.innerHTML = `<span class="stat-clickable text-new${active ? ' stat-active' : ''}">${newCount} NEW</span>`;
     statNew.querySelector('.stat-clickable').addEventListener('click', () => {
       state.filterNew = !state.filterNew;
-      renderFileList();
-      renderStats();
+      document.dispatchEvent(new CustomEvent('file-filters-changed'));
     });
   } else {
     statNew.textContent = '0 new';
@@ -124,8 +120,7 @@ export function renderStats() {
         state.activeSourceIds = new Set(idsForLabel);
       }
       renderSourceDropdown();
-      renderFileList();
-      renderStats();
+      document.dispatchEvent(new CustomEvent('file-filters-changed'));
     });
     statSources.appendChild(span);
   });

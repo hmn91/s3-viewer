@@ -34,6 +34,7 @@ export function dbRowToFile(row) {
     lastModified: row.last_modified ? new Date(row.last_modified) : null,
     firstSeen: row.first_seen,
     isNew: isNewFile(row.first_seen),
+    isHidden: Boolean(row.is_hidden),
     tags: row.tags || [],
     comment: row.comment || '',
   };

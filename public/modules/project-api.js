@@ -42,6 +42,17 @@ export async function apiUpdateLastFetch(id) {
   return res.json();
 }
 
+export async function apiUpdateFilePageSize(id, filePageSize) {
+  const res = await fetch(`/api/projects/${id}/file-page-size`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_page_size: filePageSize }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to save page size');
+  return data;
+}
+
 export async function apiSearch(q, type = 'all', includeHidden = false) {
   const params = new URLSearchParams({ q, type });
   if (includeHidden) params.set('include_hidden', '1');

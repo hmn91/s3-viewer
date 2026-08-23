@@ -65,18 +65,33 @@ export async function apiProxyFetchPaginated(baseUrl, { continuationToken, marke
   return apiProxyFetch(url, signal);
 }
 
-export async function apiGetFiles(projectId) {
-  const url = projectId ? `/api/files?project_id=${projectId}` : '/api/files';
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Failed to load files');
-  return res.json();
-}
+export async function apiGetFiles(projectId, options = {}, signal) {
+  const params = new URLSearchParams({
+    project_id: projectId,
+    page: options.page ?? 1,
+    limit: options.limit ?? 50,
+    show_hidden: Boolean(options.showHidden),
+    negative_search: Boolean(options.negativeSearch),
+    include_no_tag: Boolean(options.includeNoTag),
+    new_only: Boolean(options.newOnly),
+  });
+  if (options.search) params.set('search', options.search);
+  if (options.sourceIds !== null && options.sourceIds !== undefined) {
+    params.set('source_ids', options.sourceIds.join(','));
+  }
+  if (options.tagIds !== null && options.tagIds !== undefined) {
+    params.set('tag_ids', options.tagIds.join(','));
+  }
+  if (options.sortCol && options.sortDir) {
+    params.set('sort_col', options.sortCol);
+    params.set('sort_dir', options.sortDir);
+  }
 
-export async function apiGetSeen(projectId, signal) {
-  // seen map is used for fetch-all dedup; we filter by project via the sources already loaded
-  const url = projectId ? `/api/seen?project_id=${projectId}` : '/api/seen';
-  const res = await fetch(url, { signal });
-  if (!res.ok) throw new Error('Failed to load seen files');
+  const res = await fetch(`/api/files?${params}`, { signal });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to load files');
+  }
   return res.json();
 }
 
@@ -106,12 +121,6 @@ export async function apiUpdateComment(fileKey, comment, projectId) {
     const data = await res.json();
     throw new Error(data.error || 'Failed to update comment');
   }
-}
-
-export async function apiGetHiddenKeys(projectId) {
-  const res = await fetch(`/api/hidden?project_id=${projectId}`);
-  if (!res.ok) throw new Error('Failed to load hidden files');
-  return res.json(); // string[]
 }
 
 export async function apiHideFile(fileKey, projectId) {

@@ -14,6 +14,7 @@ Localhost web app to browse, tag, and manage files from S3-compatible public buc
 - **CORS proxy** — built-in proxy route to bypass browser CORS when fetching S3 XML
 - **Fetch progress & safe stopping** — live object/page counts, cancellable fetches, and a persisted confirmation for listings over 100 pages
 - **Automatic blacklist** — hide fetched files by extension, URL prefix, or URL suffix with project-scoped rules
+- **Server-side file pagination** — load 20, 50, or 100 filtered files per request
 
 ## Requirements
 
@@ -71,18 +72,24 @@ s3-viewer/
 |--------|------|-------------|
 | GET/POST/PUT/DELETE | `/api/projects` | Project management |
 | PATCH | `/api/projects/:id/last-fetch` | Update last fetch timestamp |
+| PATCH | `/api/projects/:id/file-page-size` | Save the project's 20/50/100 page-size preference |
 | GET | `/api/search?q=&type=` | Global search |
 | GET/POST/PUT/DELETE | `/api/sources` | S3 source URL management |
 | PATCH | `/api/sources/:id/fetch-limit` | Remember approval to fetch beyond 100 listing pages |
-| GET | `/api/files?project_id=N` | List files with tags |
-| GET/POST | `/api/seen` | Seen-files map (used by fetch flow) |
+| GET | `/api/files?project_id=N&page=1&limit=50&show_hidden=false` | Paginated files (limits: 20, 50, 100) with filter metadata |
+| POST | `/api/seen` | Persist fetched files in bounded batches |
 | GET | `/api/download?url=&filename=` | Download an original remote file |
 | GET | `/api/download-m3u8?url=&filename=` | Remux an M3U8 stream to MP4 with FFmpeg |
 | PUT | `/api/files/:key/comment` | Save comment |
 | POST/DELETE | `/api/files/:key/hide` | Hide / unhide file |
-| GET | `/api/hidden?project_id=N` | List hidden file keys |
 | POST | `/api/hidden/batch` | Hide many files in one transaction |
 | GET/POST/DELETE | `/api/blacklist-rules` | Project blacklist rule management |
 | GET/POST/PUT/DELETE | `/api/tags` | Tag management |
 | POST/DELETE | `/api/files/:key/tags` | Assign / remove tag from file |
 | GET | `/api/fetch?url=` | CORS proxy for S3 XML |
+
+`GET /api/files` always requires `project_id`, defaults to `page=1&limit=50&show_hidden=false`,
+and accepts only `20`, `50`, or `100` for `limit`. Its response contains `items`, pagination
+metadata, the project-wide hidden count, and the project-wide file count. Search, negative search,
+source, tag, NEW, hidden, and sort filters are applied before pagination. The selected page size is
+stored per project and restored the next time that project is opened.

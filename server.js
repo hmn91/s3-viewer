@@ -47,7 +47,8 @@ db.exec(`
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT NOT NULL UNIQUE,
     created_at TEXT DEFAULT (datetime('now')),
-    last_fetch_at TEXT
+    last_fetch_at TEXT,
+    file_page_size INTEGER NOT NULL DEFAULT 50 CHECK (file_page_size IN (20, 50, 100))
   );
 
   CREATE TABLE IF NOT EXISTS sources (
@@ -119,6 +120,12 @@ if (!sfCols.some(c => c.name === 'comment')) {
 const sourceCols = db.prepare("PRAGMA table_info(sources)").all();
 if (!sourceCols.some(c => c.name === 'allow_fetch_beyond_100')) {
   db.exec("ALTER TABLE sources ADD COLUMN allow_fetch_beyond_100 INTEGER NOT NULL DEFAULT 0");
+}
+
+// Persist each project's preferred file-page size.
+const projectCols = db.prepare("PRAGMA table_info(projects)").all();
+if (!projectCols.some(c => c.name === 'file_page_size')) {
+  db.exec("ALTER TABLE projects ADD COLUMN file_page_size INTEGER NOT NULL DEFAULT 50 CHECK (file_page_size IN (20, 50, 100))");
 }
 
 // === MIDDLEWARE ===

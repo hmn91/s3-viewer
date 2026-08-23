@@ -6,19 +6,18 @@ import {
   apiBatchHideFiles,
   apiFetchSources,
   apiProxyFetchPaginated,
-  apiGetSeen,
   apiSaveSeen,
 } from './api.js';
 import { apiGetBlacklistRules } from './api-blacklist.js';
 import { apiUpdateLastFetch } from './project-api.js';
 import { parseS3Xml } from './parse.js';
-import { isNewFile } from './sort-filter.js';
-import { renderFileList, renderStats, renderSourceDropdown, renderTagFilter } from './render-ui.js';
+import { renderSourceDropdown, renderTagFilter } from './render-ui.js';
 import { escHtml, formatDate } from './utils.js';
 import { findBlacklistRule } from './blacklist-match.js';
-import { updateHiddenButton } from './hidden-ui.js';
+import { loadFilePage } from './file-page.js';
 
 const PAGE_WARNING_THRESHOLD = 100;
+const SAVE_BATCH_SIZE = 1000;
 let activeRun = null;
 
 function isAbortError(err) {
@@ -155,14 +154,12 @@ export async function fetchAll() {
   let outcome = 'complete';
 
   try {
-    // 1. Load latest sources + seen map in parallel (scoped to current project)
-    const [sources, seenMap, blacklistRules] = await Promise.all([
+    // 1. Load latest project configuration in parallel.
+    const [sources, blacklistRules] = await Promise.all([
       apiFetchSources(projectId, run.controller.signal),
-      apiGetSeen(projectId, run.controller.signal),
       apiGetBlacklistRules(projectId, run.controller.signal),
     ]);
     state.sources = sources;
-    state.seenMap = seenMap;
     state.blacklistRules = blacklistRules;
     run.sourceCount = sources.length;
     updateProgress(run);
@@ -264,39 +261,30 @@ export async function fetchAll() {
       }
     }
 
-    // 4. Enrich fetched objects with persisted first-seen time, tags and comments.
+    // 4. Prepare fetched objects for INSERT OR IGNORE. SQLite preserves first_seen,
+    // tags, and comments for records that already exist, so no all-files GET is needed.
     updateProgress(run, run.stopped ? 'Stopped; processing fetched data' : 'Processing fetched data');
-    const newFileEntries = [];
+    const fileEntries = [];
     const blacklistedKeys = new Set();
     for (const f of allFiles) {
       const seenKey = `${f.sourceUrl}::${f.key}`;
       f.key = seenKey;
-      const seen = seenMap[seenKey];
-      if (seen) {
-        f.firstSeen = seen.firstSeen;
-        f.tags = seen.tags || [];
-        f.comment = seen.comment || '';
-      } else {
-        f.firstSeen = nowIso;
-        f.tags = [];
-        f.comment = '';
-        newFileEntries.push({
-          key: seenKey,
-          sourceUrl: f.sourceUrl,
-          firstSeen: nowIso,
-          size: f.size,
-          lastModified: f.lastModified?.toISOString() || null,
-        });
-      }
-      f.isNew = isNewFile(f.firstSeen);
+      fileEntries.push({
+        key: seenKey,
+        sourceUrl: f.sourceUrl,
+        firstSeen: nowIso,
+        size: f.size,
+        lastModified: f.lastModified?.toISOString() || null,
+      });
       if (findBlacklistRule(f, blacklistRules)) blacklistedKeys.add(f.key);
-      f.isHidden = state.hiddenKeys.has(f.key);
     }
 
-    // 5. Persist every newly discovered object, including objects fetched before Stop.
-    if (newFileEntries.length > 0) {
+    // 5. Persist in bounded batches, including objects fetched before Stop.
+    if (fileEntries.length > 0) {
       updateProgress(run, run.stopped ? 'Stopped; saving fetched data' : 'Saving fetched data');
-      await apiSaveSeen(newFileEntries, projectId);
+      for (let index = 0; index < fileEntries.length; index += SAVE_BATCH_SIZE) {
+        await apiSaveSeen(fileEntries.slice(index, index + SAVE_BATCH_SIZE), projectId);
+      }
     }
 
     // Persist automatic hides as a batch, then reflect them in UI state.
@@ -305,24 +293,17 @@ export async function fetchAll() {
       try {
         await apiBatchHideFiles([...blacklistedKeys], projectId);
         run.autoHidden = blacklistedKeys.size;
-        for (const key of blacklistedKeys) state.hiddenKeys.add(key);
-        for (const file of allFiles) {
-          if (blacklistedKeys.has(file.key)) file.isHidden = true;
-        }
       } catch (err) {
         state.fetchErrors.Blacklist = err?.message || 'Failed to hide blacklisted files';
       }
     }
 
-    state.allFiles = allFiles;
     state.activeSourceIds = new Set(sources.map(s => s.id));
     state.activeTagIds = new Set(state.tags.map(t => t.id));
     state.filterNoTag = true;
-    updateHiddenButton();
 
-    // 6. Render partial or complete results through the same normal flow.
-    renderFileList();
-    renderStats();
+    // 6. Reload only the first API page; never place the full fetch in UI state.
+    await loadFilePage(1);
     renderSourceDropdown();
     renderTagFilter();
     showFetchMessages(run);

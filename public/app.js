@@ -2,17 +2,15 @@
 // All logic delegated to modules/
 
 import { state } from './modules/state.js';
-import { apiFetchSources, apiGetFiles, apiGetHiddenKeys, apiHideFile, apiUnhideFile, apiUpdateComment } from './modules/api.js';
+import { apiFetchSources, apiHideFile, apiUnhideFile, apiUpdateComment } from './modules/api.js';
 import { apiGetTags } from './modules/api-tags.js';
-import { apiGetProjects } from './modules/project-api.js';
+import { apiGetProjects, apiUpdateFilePageSize } from './modules/project-api.js';
 import { apiGetBlacklistRules } from './modules/api-blacklist.js';
 import { renderFileList, renderStats, renderSourceDropdown, renderTagFilter } from './modules/render-ui.js';
 import { openModal, closeModal, addSource } from './modules/sources-modal.js';
 import { fetchAll, stopFetch } from './modules/fetch-all.js';
-import { dbRowToFile } from './modules/parse.js';
 import { openTagModal, closeTagModal } from './modules/tags-modal.js';
 import { openTagPicker, closeAllTagPickers } from './modules/file-tag-ui.js';
-import { updateFileRowHidden } from './modules/render-table.js';
 import {
   showProjectListView, showProjectDetailView,
   renderProjectList, bindNewProjectButton, setProjectSelectHandler,
@@ -25,6 +23,7 @@ import {
   updateBlacklistHelp,
 } from './modules/blacklist-modal.js';
 import { updateHiddenButton } from './modules/hidden-ui.js';
+import { loadFilePage, renderFilePagination } from './modules/file-page.js';
 
 // =====================================================================
 // PROJECT NAVIGATION
@@ -39,7 +38,15 @@ async function enterProject(project) {
   state.allFiles = [];
   state.tags = [];
   state.blacklistRules = [];
-  state.seenMap = {};
+  state.filePage = 1;
+  state.filePageSize = [20, 50, 100].includes(Number(project.file_page_size))
+    ? Number(project.file_page_size)
+    : 50;
+  state.fileTotal = 0;
+  state.fileTotalPages = 0;
+  state.projectFileTotal = 0;
+  state.hiddenCount = 0;
+  state.newCount = 0;
   state.activeSourceIds = new Set();
   state.activeTagIds = new Set();
   state.filterNoTag = false;
@@ -51,7 +58,6 @@ async function enterProject(project) {
   state.sortCol = null;
   state.sortDir = null;
   state.fetchErrors = {};
-  state.hiddenKeys = new Set();
   state.showHidden = false;
 
   // Reset UI controls to match cleared state
@@ -59,8 +65,13 @@ async function enterProject(project) {
   if (searchInput) searchInput.value = '';
   const negativeSearchInput = document.getElementById('negative-search');
   if (negativeSearchInput) negativeSearchInput.checked = false;
+  document.getElementById('file-page-size').value = String(state.filePageSize);
 
   showProjectDetailView(project);
+  document.getElementById('main-content').innerHTML = '<div class="empty-state">Loading files...</div>';
+  document.getElementById('stats-bar').classList.add('hidden');
+  updateHiddenButton();
+  renderFilePagination();
 
   // Update --header-h for sticky subheader inside project detail
   const headerEl = document.querySelector('#view-project-detail .header');
@@ -76,11 +87,9 @@ async function enterProject(project) {
 
   // Load project-scoped data
   try {
-    const [sources, dbRows, tags, hiddenKeys, blacklistRules] = await Promise.all([
+    const [sources, tags, blacklistRules] = await Promise.all([
       apiFetchSources(project.id),
-      apiGetFiles(project.id),
       apiGetTags(project.id),
-      apiGetHiddenKeys(project.id),
       apiGetBlacklistRules(project.id),
     ]);
 
@@ -90,23 +99,10 @@ async function enterProject(project) {
     // Init tag filter: all selected (= show all), matches visible state so dropdown isn't misleading
     state.activeTagIds = new Set(tags.map(t => t.id));
     state.filterNoTag = true;
-    state.hiddenKeys = new Set(hiddenKeys);
     state.blacklistRules = blacklistRules;
-
-    if (dbRows.length > 0) {
-      state.allFiles = dbRows.map(dbRowToFile);
-      state.allFiles.forEach(f => { f.isHidden = state.hiddenKeys.has(f.key); });
-      renderFileList();
-      renderStats();
-    } else {
-      document.getElementById('main-content').innerHTML =
-        '<div class="empty-state">Add sources via ⚙ Manage Sources, then click ⬇ Fetch All.</div>';
-      document.getElementById('stats-bar').classList.add('hidden');
-    }
-
-    updateHiddenButton();
     renderSourceDropdown();
     renderTagFilter();
+    await loadFilePage(1);
   } catch (err) {
     console.error('Failed to load project data:', err);
   }
@@ -167,6 +163,8 @@ async function copyText(text) {
 // =====================================================================
 
 function bindFileViewerEvents() {
+  let fileSearchTimer = null;
+
   // Back to projects
   document.getElementById('btn-back-to-projects').addEventListener('click', exitProject);
 
@@ -231,8 +229,7 @@ function bindFileViewerEvents() {
   });
   document.getElementById('btn-apply-source-filter').addEventListener('click', () => {
     document.getElementById('source-dropdown-panel').classList.add('hidden');
-    renderFileList();
-    renderStats();
+    loadFilePage(1);
   });
 
   // Tag filter dropdown: toggle + search + select/deselect all + apply
@@ -262,20 +259,18 @@ function bindFileViewerEvents() {
     // Guard: do nothing if nothing selected (button should be disabled, but double-check)
     if (state.activeTagIds.size === 0 && !state.filterNoTag) return;
     document.getElementById('tag-filter-panel').classList.add('hidden');
-    renderFileList();
-    renderStats();
+    loadFilePage(1);
   });
 
-  // Global filename search (project-scoped — state.allFiles already project-filtered)
+  // Global file search is server-side so it covers every page.
   document.getElementById('global-search').addEventListener('input', e => {
     state.searchQuery = e.target.value;
-    renderFileList();
-    renderStats();
+    clearTimeout(fileSearchTimer);
+    fileSearchTimer = setTimeout(() => loadFilePage(1), 300);
   });
   document.getElementById('negative-search').addEventListener('change', e => {
     state.negativeSearch = e.target.checked;
-    renderFileList();
-    renderStats();
+    loadFilePage(1);
   });
 
   // Tag manager modal
@@ -297,7 +292,7 @@ function bindFileViewerEvents() {
     } else {
       state.sortCol = null; state.sortDir = null;
     }
-    renderFileList();
+    loadFilePage(1);
   });
 
   // Tag inline picker — event delegation
@@ -340,10 +335,7 @@ function bindFileViewerEvents() {
       const fileKey = hideBtn.dataset.fileKey;
       try {
         await apiHideFile(fileKey, state.currentProject?.id);
-        state.hiddenKeys.add(fileKey);
-        const file = state.allFiles.find(f => f.key === fileKey);
-        if (file) { file.isHidden = true; updateFileRowHidden(file); }
-        updateHiddenButton();
+        await loadFilePage(state.filePage);
       } catch (err) { console.error('Hide failed:', err); }
       return;
     }
@@ -353,10 +345,7 @@ function bindFileViewerEvents() {
       const fileKey = unhideBtn.dataset.fileKey;
       try {
         await apiUnhideFile(fileKey, state.currentProject?.id);
-        state.hiddenKeys.delete(fileKey);
-        const file = state.allFiles.find(f => f.key === fileKey);
-        if (file) { file.isHidden = false; updateFileRowHidden(file); }
-        updateHiddenButton();
+        await loadFilePage(state.filePage);
       } catch (err) { console.error('Unhide failed:', err); }
       return;
     }
@@ -366,9 +355,32 @@ function bindFileViewerEvents() {
   document.getElementById('btn-show-hidden').addEventListener('click', () => {
     state.showHidden = !state.showHidden;
     updateHiddenButton();
-    renderFileList();
-    renderStats();
+    loadFilePage(1);
   });
+
+  // File pagination
+  document.getElementById('file-page-size').addEventListener('change', async e => {
+    const previousSize = state.filePageSize;
+    const nextSize = Number(e.target.value);
+    state.filePageSize = nextSize;
+    try {
+      const updated = await apiUpdateFilePageSize(state.currentProject?.id, nextSize);
+      state.currentProject.file_page_size = updated.file_page_size;
+    } catch (err) {
+      state.filePageSize = previousSize;
+      e.target.value = String(previousSize);
+      console.error('Failed to save file page size:', err);
+      return;
+    }
+    loadFilePage(1);
+  });
+  document.getElementById('btn-file-page-prev').addEventListener('click', () => {
+    if (state.filePage > 1) loadFilePage(state.filePage - 1);
+  });
+  document.getElementById('btn-file-page-next').addEventListener('click', () => {
+    if (state.filePage < state.fileTotalPages) loadFilePage(state.filePage + 1);
+  });
+  document.addEventListener('file-filters-changed', () => loadFilePage(1));
 
   // Comment inline edit — click span to edit, blur/Enter to save
   document.getElementById('main-content').addEventListener('click', e => {

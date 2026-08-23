@@ -1,6 +1,120 @@
-// Seen files routes: GET /api/files, GET /api/seen, POST /api/seen, hide/unhide routes
+// Paginated file listing, seen-file persistence, and hide/unhide routes.
 
 import { Router } from 'express';
+
+export const FILE_PAGE_LIMITS = [20, 50, 100];
+const DEFAULT_FILE_PAGE_LIMIT = 50;
+const SORT_COLUMNS = {
+  displayName: 'sf.key',
+  folder: 'sf.key',
+  sourceLabel: 's.label',
+  size: 'sf.size',
+  lastModified: 'sf.last_modified',
+  firstSeen: 'sf.first_seen',
+  comment: 'sf.comment',
+};
+
+function parsePositiveInteger(value, fallback, name) {
+  if (value === undefined) return fallback;
+  if (!/^\d+$/.test(String(value)) || Number(value) < 1) throw new Error(`${name} must be a positive integer`);
+  return Number(value);
+}
+
+function parseBoolean(value, fallback, name) {
+  if (value === undefined) return fallback;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new Error(`${name} must be true or false`);
+}
+
+function parseIdList(query, name) {
+  if (!Object.hasOwn(query, name)) return null;
+  if (typeof query[name] !== 'string') throw new Error(`${name} must be a comma-separated ID list`);
+  if (query[name] === '') return [];
+  const values = query[name].split(',');
+  if (values.some(value => !/^\d+$/.test(value) || Number(value) < 1)) {
+    throw new Error(`${name} must contain positive integer IDs`);
+  }
+  return [...new Set(values.map(Number))];
+}
+
+export function parseFilesQuery(query) {
+  const projectId = parsePositiveInteger(query.project_id, null, 'project_id');
+  if (!projectId) throw new Error('project_id required');
+  const page = parsePositiveInteger(query.page, 1, 'page');
+  const limit = parsePositiveInteger(query.limit, DEFAULT_FILE_PAGE_LIMIT, 'limit');
+  if (!FILE_PAGE_LIMITS.includes(limit)) throw new Error('limit must be one of 20, 50, or 100');
+
+  const sortCol = query.sort_col || null;
+  const sortDir = query.sort_dir || null;
+  if (sortCol && !SORT_COLUMNS[sortCol]) throw new Error('Invalid sort_col');
+  if (sortDir && !['asc', 'desc'].includes(sortDir)) throw new Error('sort_dir must be asc or desc');
+
+  return {
+    projectId,
+    page,
+    limit,
+    showHidden: parseBoolean(query.show_hidden, false, 'show_hidden'),
+    sourceIds: parseIdList(query, 'source_ids'),
+    tagIds: parseIdList(query, 'tag_ids'),
+    includeNoTag: parseBoolean(query.include_no_tag, false, 'include_no_tag'),
+    search: typeof query.search === 'string' ? query.search : '',
+    negativeSearch: parseBoolean(query.negative_search, false, 'negative_search'),
+    newOnly: parseBoolean(query.new_only, false, 'new_only'),
+    sortCol,
+    sortDir,
+  };
+}
+
+function buildFileFilters(options) {
+  const clauses = ['sf.project_id = ?'];
+  const params = [options.projectId];
+
+  if (!options.showHidden) clauses.push('hf.file_key IS NULL');
+
+  if (options.sourceIds !== null) {
+    if (options.sourceIds.length === 0) clauses.push('0 = 1');
+    else {
+      clauses.push(`s.id IN (${options.sourceIds.map(() => '?').join(', ')})`);
+      params.push(...options.sourceIds);
+    }
+  }
+
+  if (options.search) {
+    const escapedSearch = options.search.toLowerCase().replace(/[\\%_]/g, '\\$&');
+    const pattern = `%${escapedSearch}%`;
+    const matchSql = `(LOWER(sf.key) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(sf.comment, '')) LIKE ? ESCAPE '\\' OR EXISTS (
+      SELECT 1 FROM file_tags search_ft
+      JOIN tags search_t ON search_t.id = search_ft.tag_id
+      WHERE search_ft.file_key = sf.key AND search_ft.project_id = sf.project_id
+        AND LOWER(search_t.name) LIKE ? ESCAPE '\\'
+    ))`;
+    clauses.push(options.negativeSearch ? `NOT ${matchSql}` : matchSql);
+    params.push(pattern, pattern, pattern);
+  }
+
+  if (options.tagIds !== null) {
+    const tagParts = [];
+    if (options.includeNoTag) {
+      tagParts.push(`NOT EXISTS (
+        SELECT 1 FROM file_tags no_tag_ft
+        WHERE no_tag_ft.file_key = sf.key AND no_tag_ft.project_id = sf.project_id
+      )`);
+    }
+    if (options.tagIds.length > 0) {
+      tagParts.push(`EXISTS (
+        SELECT 1 FROM file_tags filter_ft
+        WHERE filter_ft.file_key = sf.key AND filter_ft.project_id = sf.project_id
+          AND filter_ft.tag_id IN (${options.tagIds.map(() => '?').join(', ')})
+      )`);
+      params.push(...options.tagIds);
+    }
+    clauses.push(tagParts.length > 0 ? `(${tagParts.join(' OR ')})` : '0 = 1');
+  }
+
+  if (options.newOnly) clauses.push("datetime(sf.first_seen) >= datetime('now', '-1 day')");
+  return { whereSql: clauses.join(' AND '), params };
+}
 
 // Decode URL-safe base64 (RFC 4648 §5): - → +, _ → /, restore padding
 function decodeFileKey(encoded) {
@@ -12,35 +126,63 @@ function decodeFileKey(encoded) {
 export function createFilesRouter(db) {
   const router = Router();
 
-  // GET /api/files?project_id=N — return seen files for a project, joined with source info
+  // GET /api/files?project_id=N&page=1&limit=50&show_hidden=false
+  // Returns one filtered page plus totals. Hidden rows are included only when requested.
   router.get('/files', (req, res) => {
-    const projectId = req.query.project_id ? Number(req.query.project_id) : null;
-    // Join sources matching both url AND project_id to avoid ambiguity when same URL
-    // exists in multiple projects.
-    const query = projectId
-      ? `SELECT sf.key, sf.source_url, sf.first_seen, sf.size, sf.last_modified, sf.comment,
-                s.label as source_label, s.id as source_id,
-                GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
-         FROM seen_files sf
-         LEFT JOIN sources s ON sf.source_url = s.url AND s.project_id = sf.project_id
-         LEFT JOIN file_tags ft ON sf.key = ft.file_key AND ft.project_id = sf.project_id
-         LEFT JOIN tags t ON ft.tag_id = t.id
-         WHERE sf.project_id = ?
-         GROUP BY sf.key
-         ORDER BY sf.last_modified DESC`
-      : `SELECT sf.key, sf.source_url, sf.first_seen, sf.size, sf.last_modified, sf.comment,
-                s.label as source_label, s.id as source_id,
-                GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
-         FROM seen_files sf
-         LEFT JOIN sources s ON sf.source_url = s.url AND s.project_id = sf.project_id
-         LEFT JOIN file_tags ft ON sf.key = ft.file_key AND ft.project_id = sf.project_id
-         LEFT JOIN tags t ON ft.tag_id = t.id
-         GROUP BY sf.key
-         ORDER BY sf.last_modified DESC`;
-    const rows = projectId
-      ? db.prepare(query).all(projectId)
-      : db.prepare(query).all();
-    const result = rows.map(row => ({
+    let options;
+    try {
+      options = parseFilesQuery(req.query);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    const { whereSql, params } = buildFileFilters(options);
+    const totalItems = db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM seen_files sf
+      LEFT JOIN sources s ON sf.source_url = s.url AND s.project_id = sf.project_id
+      LEFT JOIN hidden_files hf ON sf.key = hf.file_key AND sf.project_id = hf.project_id
+      WHERE ${whereSql}
+    `).get(...params).count;
+    const projectTotalItems = db.prepare(
+      'SELECT COUNT(*) AS count FROM seen_files WHERE project_id = ?'
+    ).get(options.projectId).count;
+    const hiddenCount = db.prepare(
+      'SELECT COUNT(*) AS count FROM hidden_files WHERE project_id = ?'
+    ).get(options.projectId).count;
+    const withoutNewFilter = buildFileFilters({ ...options, newOnly: false });
+    const newCount = db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM seen_files sf
+      LEFT JOIN sources s ON sf.source_url = s.url AND s.project_id = sf.project_id
+      LEFT JOIN hidden_files hf ON sf.key = hf.file_key AND sf.project_id = hf.project_id
+      WHERE ${withoutNewFilter.whereSql}
+        AND datetime(sf.first_seen) >= datetime('now', '-1 day')
+    `).get(...withoutNewFilter.params).count;
+
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / options.limit);
+    const page = totalPages === 0 ? 1 : Math.min(options.page, totalPages);
+    const offset = (page - 1) * options.limit;
+    const sortColumn = options.sortCol ? SORT_COLUMNS[options.sortCol] : 'sf.last_modified';
+    const sortDirection = options.sortCol && options.sortDir ? options.sortDir.toUpperCase() : 'DESC';
+
+    const rows = db.prepare(`
+      SELECT sf.key, sf.source_url, sf.first_seen, sf.size, sf.last_modified, sf.comment,
+             s.label AS source_label, s.id AS source_id,
+             CASE WHEN hf.file_key IS NULL THEN 0 ELSE 1 END AS is_hidden,
+             GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) AS tags_raw
+      FROM seen_files sf
+      LEFT JOIN sources s ON sf.source_url = s.url AND s.project_id = sf.project_id
+      LEFT JOIN hidden_files hf ON sf.key = hf.file_key AND sf.project_id = hf.project_id
+      LEFT JOIN file_tags ft ON sf.key = ft.file_key AND ft.project_id = sf.project_id
+      LEFT JOIN tags t ON ft.tag_id = t.id
+      WHERE ${whereSql}
+      GROUP BY sf.key, sf.project_id
+      ORDER BY ${sortColumn} ${sortDirection}, sf.key ASC
+      LIMIT ? OFFSET ?
+    `).all(...params, options.limit, offset);
+
+    const items = rows.map(row => ({
       key: row.key,
       source_url: row.source_url,
       first_seen: row.first_seen,
@@ -48,6 +190,7 @@ export function createFilesRouter(db) {
       last_modified: row.last_modified,
       source_label: row.source_label,
       source_id: row.source_id,
+      is_hidden: Boolean(row.is_hidden),
       comment: row.comment || null,
       tags: row.tags_raw
         ? row.tags_raw.split(',').map(t => {
@@ -56,45 +199,19 @@ export function createFilesRouter(db) {
           })
         : [],
     }));
-    res.json(result);
-  });
 
-  // GET /api/seen?project_id=N — return map { key: { sourceUrl, firstSeen, size, lastModified, tags, comment } }
-  // Includes tag assignments so fetch-all can preserve tags on S3-fetched files.
-  router.get('/seen', (req, res) => {
-    const projectId = req.query.project_id ? Number(req.query.project_id) : null;
-    const query = projectId
-      ? `SELECT sf.*, GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
-         FROM seen_files sf
-         LEFT JOIN file_tags ft ON sf.key = ft.file_key AND ft.project_id = sf.project_id
-         LEFT JOIN tags t ON ft.tag_id = t.id
-         WHERE sf.project_id = ?
-         GROUP BY sf.key`
-      : `SELECT sf.*, GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_raw
-         FROM seen_files sf
-         LEFT JOIN file_tags ft ON sf.key = ft.file_key AND ft.project_id = sf.project_id
-         LEFT JOIN tags t ON ft.tag_id = t.id
-         GROUP BY sf.key`;
-    const rows = projectId
-      ? db.prepare(query).all(projectId)
-      : db.prepare(query).all();
-    const map = {};
-    for (const row of rows) {
-      map[row.key] = {
-        sourceUrl: row.source_url,
-        firstSeen: row.first_seen,
-        size: row.size,
-        lastModified: row.last_modified,
-        comment: row.comment || '',
-        tags: row.tags_raw
-          ? row.tags_raw.split(',').map(t => {
-              const [id, name, color] = t.split(':');
-              return { id: Number(id), name, color };
-            })
-          : [],
-      };
-    }
-    res.json(map);
+    res.json({
+      items,
+      pagination: {
+        page,
+        limit: options.limit,
+        total_items: totalItems,
+        total_pages: totalPages,
+      },
+      project_total_items: projectTotalItems,
+      hidden_count: hiddenCount,
+      new_count: newCount,
+    });
   });
 
   // POST /api/seen — batch upsert { project_id, files: [{ key, sourceUrl, firstSeen, size, lastModified }] }
@@ -192,14 +309,6 @@ export function createFilesRouter(db) {
     db.prepare('DELETE FROM hidden_files WHERE file_key = ? AND project_id = ?')
       .run(fileKey, projectId);
     res.json({ hidden: false });
-  });
-
-  // GET /api/hidden?project_id=N — list hidden file keys for project
-  router.get('/hidden', (req, res) => {
-    const projectId = req.query.project_id ? Number(req.query.project_id) : null;
-    if (!projectId) return res.status(400).json({ error: 'project_id required' });
-    const rows = db.prepare('SELECT file_key FROM hidden_files WHERE project_id = ?').all(projectId);
-    res.json(rows.map(r => r.file_key));
   });
 
   return router;
