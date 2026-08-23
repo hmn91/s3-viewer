@@ -141,6 +141,27 @@ function highlightFileRow(fileKey) {
   });
 }
 
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall back for browsers that deny Clipboard API permission.
+    }
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  if (!copied) throw new Error('Clipboard access denied');
+}
+
 // =====================================================================
 // FILE VIEWER EVENT BINDINGS (bound once, work inside #view-project-detail)
 // =====================================================================
@@ -287,8 +308,32 @@ function bindFileViewerEvents() {
     openTagPicker(btn, btn.dataset.fileKey);
   });
 
-  // Hide file — event delegation
+  // Copy URL and hide/unhide file actions — event delegation
   document.getElementById('main-content').addEventListener('click', async e => {
+    const copyBtn = e.target.closest('.btn-copy-url');
+    if (copyBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const file = state.allFiles.find(f => f.key === copyBtn.dataset.fileKey);
+      if (!file) return;
+      try {
+        await copyText(file.url);
+        copyBtn.textContent = '✓';
+        copyBtn.classList.add('btn-file-action-success');
+        copyBtn.title = 'URL copied';
+        setTimeout(() => {
+          copyBtn.textContent = '⧉';
+          copyBtn.classList.remove('btn-file-action-success');
+          copyBtn.title = 'Copy URL';
+        }, 1500);
+      } catch (err) {
+        copyBtn.textContent = '!';
+        copyBtn.title = err.message;
+        console.error('Copy URL failed:', err);
+      }
+      return;
+    }
+
     const hideBtn = e.target.closest('.btn-hide-file');
     if (hideBtn) {
       e.stopPropagation();

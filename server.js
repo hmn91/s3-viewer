@@ -10,6 +10,7 @@ import { createProxyRouter } from './routes/proxy.js';
 import { createTagsRouter } from './routes/tags.js';
 import { createProjectsRouter } from './routes/projects.js';
 import { createBlacklistRouter } from './routes/blacklist.js';
+import { createDownloadsRouter } from './routes/downloads.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -132,6 +133,7 @@ app.use('/api', createFilesRouter(db));
 app.use('/api', createTagsRouter(db));
 app.use('/api', createBlacklistRouter(db));
 app.use('/api', createProxyRouter());
+app.use('/api', createDownloadsRouter());
 
 // === FALLBACK SPA ===
 app.get('*', (_req, res) => {

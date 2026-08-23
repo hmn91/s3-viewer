@@ -746,17 +746,28 @@ main {
 
 /* ===== HIDDEN FILES ===== */
 .file-row-hidden { opacity: 0.45; }
-.col-hide { width: 32px; text-align: center; }
-.btn-hide-file, .btn-unhide-file {
+.col-actions { width: 132px; text-align: center; }
+.file-actions { display: flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; }
+.btn-file-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
   background: none;
   border: none;
   cursor: pointer;
+  color: var(--muted);
+  font: inherit;
   font-size: 14px;
   padding: 2px 4px;
   border-radius: 3px;
-  opacity: 0.5;
+  text-decoration: none;
+  opacity: 0.65;
 }
-.btn-hide-file:hover, .btn-unhide-file:hover { opacity: 1; background: var(--bg); }
+.btn-file-action:hover { opacity: 1; color: var(--primary); background: var(--bg); }
+.btn-download-mp4 { min-width: 32px; font-size: 10px; font-weight: 700; }
+.btn-file-action-success { color: #15803d; opacity: 1; }
 
 /* ===== FILE ROW HIGHLIGHT (global search navigation) ===== */
 @keyframes highlight-fade {

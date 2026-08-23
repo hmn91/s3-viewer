@@ -12,7 +12,7 @@ const HEADERS = [
   { key: 'firstSeen',    label: 'First Seen',    cls: 'col-seen'     },
   { key: 'tags',         label: 'Tags',          cls: 'col-tags'     },
   { key: 'comment',      label: 'Comment',       cls: 'col-comment'  },
-  { key: null,           label: '',              cls: 'col-hide'     },
+  { key: null,           label: 'Actions',       cls: 'col-actions'  },
 ];
 
 function sortIcon(col, sortCol, sortDir) {
@@ -20,6 +20,66 @@ function sortIcon(col, sortCol, sortDir) {
   return sortDir === 'asc'
     ? '<span class="sort-icon active">↑</span>'
     : '<span class="sort-icon active">↓</span>';
+}
+
+function isM3u8File(file) {
+  try {
+    if (/\.m3u8$/i.test(new URL(file.url).pathname)) return true;
+  } catch {
+    // Fall back to the parsed display name below.
+  }
+  return /\.m3u8$/i.test(file.displayName);
+}
+
+function isMp4File(file) {
+  try {
+    if (/\.mp4$/i.test(new URL(file.url).pathname)) return true;
+  } catch {
+    // Fall back to the parsed display name below.
+  }
+  return /\.mp4$/i.test(file.displayName);
+}
+
+export function formatFilenameTimestamp(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (value === null || value === undefined || value === '' || Number.isNaN(date.getTime())) return '';
+  const pad = number => String(number).padStart(2, '0');
+  return [
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`,
+  ].join('_');
+}
+
+export function mp4DownloadFilename(file) {
+  const baseName = file.displayName.replace(/\.(?:m3u8|mp4)$/i, '');
+  const timestamp = formatFilenameTimestamp(file.lastModified);
+  return `${baseName}${timestamp ? `_${timestamp}` : ''}.mp4`;
+}
+
+function actionUrl(path, file, filename = file.displayName) {
+  const params = new URLSearchParams({ url: file.url, filename });
+  return `${path}?${params}`;
+}
+
+function buildFileActions(file) {
+  const key = escHtml(file.key);
+  const originalFilename = isMp4File(file) ? mp4DownloadFilename(file) : file.displayName;
+  const downloadUrl = escHtml(actionUrl('/api/download', file, originalFilename));
+  const mp4Action = isM3u8File(file)
+    ? `<a class="btn-file-action btn-download-mp4" href="${escHtml(actionUrl('/api/download-m3u8', file, mp4DownloadFilename(file)))}" title="Download as MP4" aria-label="Download as MP4">MP4</a>`
+    : '';
+  const visibilityAction = file.isHidden
+    ? `<button class="btn-file-action btn-unhide-file" data-file-key="${key}" title="Unhide file" aria-label="Unhide file">${SVG_EYE_OPEN}</button>`
+    : `<button class="btn-file-action btn-hide-file" data-file-key="${key}" title="Hide file" aria-label="Hide file">${SVG_EYE_OFF}</button>`;
+
+  return `
+    <div class="file-actions">
+      <button class="btn-file-action btn-copy-url" data-file-key="${key}" title="Copy URL" aria-label="Copy URL">⧉</button>
+      <a class="btn-file-action" href="${downloadUrl}" title="Download original file" aria-label="Download original file">↓</a>
+      ${mp4Action}
+      ${visibilityAction}
+    </div>
+  `;
 }
 
 export function buildFileRow(file) {
@@ -54,12 +114,7 @@ export function buildFileRow(file) {
     <td class="col-comment">
       <span class="file-comment" data-file-key="${escHtml(file.key)}">${escHtml(file.comment || '')}</span>
     </td>
-    <td class="col-hide">
-      ${file.isHidden
-        ? `<button class="btn-unhide-file" data-file-key="${escHtml(file.key)}" title="Unhide file">${SVG_EYE_OPEN}</button>`
-        : `<button class="btn-hide-file"   data-file-key="${escHtml(file.key)}" title="Hide file">${SVG_EYE_OFF}</button>`
-      }
-    </td>
+    <td class="col-actions">${buildFileActions(file)}</td>
   `;
 
   // Attach click-to-open only on the filename span (not the whole row)
@@ -143,12 +198,8 @@ export function updateFileRowHidden(file) {
   const row = document.querySelector(`tr[data-file-key="${CSS.escape(file.key)}"]`);
   if (!row) return;
   row.classList.toggle('file-row-hidden', file.isHidden);
-  const hideCell = row.querySelector('.col-hide');
-  if (!hideCell) return;
-  const key = escHtml(file.key);
-  hideCell.innerHTML = file.isHidden
-    ? `<button class="btn-unhide-file" data-file-key="${key}" title="Unhide file">${SVG_EYE_OPEN}</button>`
-    : `<button class="btn-hide-file"   data-file-key="${key}" title="Hide file">${SVG_EYE_OFF}</button>`;
+  const actionsCell = row.querySelector('.col-actions');
+  if (actionsCell) actionsCell.innerHTML = buildFileActions(file);
 }
 
 // Update only the tags cell of an existing row in-place (avoids full re-render + filter side-effects)

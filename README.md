@@ -9,6 +9,7 @@ Localhost web app to browse, tag, and manage files from S3-compatible public buc
 - **Tagging** — create color-coded tags per project, assign to files
 - **Comments** — add inline notes to files
 - **Hide/unhide** — suppress files from the listing without deleting records
+- **File actions** — copy URLs, download original files, and remux `.m3u8` streams to `.mp4`
 - **Global search** — search across projects, files, sources, and tags
 - **CORS proxy** — built-in proxy route to bypass browser CORS when fetching S3 XML
 - **Fetch progress & safe stopping** — live object/page counts, cancellable fetches, and a persisted confirmation for listings over 100 pages
@@ -17,6 +18,7 @@ Localhost web app to browse, tag, and manage files from S3-compatible public buc
 ## Requirements
 
 - Node.js 22+ (uses `node:sqlite` built-in — no external DB driver needed)
+- FFmpeg in `PATH` (required only for the `.m3u8` → `.mp4` download action)
 
 ## Setup
 
@@ -52,6 +54,7 @@ s3-viewer/
 │   ├── sources.js         # S3 source URLs CRUD
 │   ├── files.js           # Seen files, hide/unhide, comments
 │   ├── tags.js            # Tags CRUD + file-tag assignment
+│   ├── downloads.js       # Original file and M3U8-to-MP4 downloads
 │   └── proxy.js           # CORS proxy for S3 XML fetch
 ├── public/
 │   ├── index.html         # SPA entry point
@@ -73,6 +76,8 @@ s3-viewer/
 | PATCH | `/api/sources/:id/fetch-limit` | Remember approval to fetch beyond 100 listing pages |
 | GET | `/api/files?project_id=N` | List files with tags |
 | GET/POST | `/api/seen` | Seen-files map (used by fetch flow) |
+| GET | `/api/download?url=&filename=` | Download an original remote file |
+| GET | `/api/download-m3u8?url=&filename=` | Remux an M3U8 stream to MP4 with FFmpeg |
 | PUT | `/api/files/:key/comment` | Save comment |
 | POST/DELETE | `/api/files/:key/hide` | Hide / unhide file |
 | GET | `/api/hidden?project_id=N` | List hidden file keys |
