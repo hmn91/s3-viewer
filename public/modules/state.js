@@ -11,6 +11,7 @@ export const state = {
   activeSourceIds: new Set(), // source IDs visible in filter; empty = show nothing
   fetchErrors: {},
   searchQuery: '',     // global filename search
+  negativeSearch: false, // if true, exclude files matching the global search
   sourceSearch: '',    // source dropdown search input
   tagSearch: '',       // tag filter dropdown search input
   tags: [],            // [{ id, name, color }] — all available tags
@@ -34,12 +35,14 @@ export function getVisibleFiles() {
   // Global search: filename, comment, tags (by name), url
   if (state.searchQuery) {
     const q = state.searchQuery.toLowerCase();
-    files = files.filter(f =>
-      f.displayName.toLowerCase().includes(q) ||
-      (f.comment && f.comment.toLowerCase().includes(q)) ||
-      (f.tags && f.tags.some(t => t.name.toLowerCase().includes(q))) ||
-      f.url.toLowerCase().includes(q)
-    );
+    files = files.filter(f => {
+      const matchesSearch =
+        f.displayName.toLowerCase().includes(q) ||
+        (f.comment && f.comment.toLowerCase().includes(q)) ||
+        (f.tags && f.tags.some(t => t.name.toLowerCase().includes(q))) ||
+        f.url.toLowerCase().includes(q);
+      return state.negativeSearch ? !matchesSearch : matchesSearch;
+    });
   }
 
   // Tag filter — OR logic across tags + "no tag" option

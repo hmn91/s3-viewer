@@ -44,6 +44,7 @@ async function enterProject(project) {
   state.activeTagIds = new Set();
   state.filterNoTag = false;
   state.searchQuery = '';
+  state.negativeSearch = false;
   state.sourceSearch = '';
   state.tagSearch = '';
   state.filterNew = false;
@@ -56,6 +57,8 @@ async function enterProject(project) {
   // Reset UI controls to match cleared state
   const searchInput = document.getElementById('global-search');
   if (searchInput) searchInput.value = '';
+  const negativeSearchInput = document.getElementById('negative-search');
+  if (negativeSearchInput) negativeSearchInput.checked = false;
 
   showProjectDetailView(project);
 
@@ -245,6 +248,11 @@ function bindFileViewerEvents() {
   // Global filename search (project-scoped — state.allFiles already project-filtered)
   document.getElementById('global-search').addEventListener('input', e => {
     state.searchQuery = e.target.value;
+    renderFileList();
+    renderStats();
+  });
+  document.getElementById('negative-search').addEventListener('change', e => {
+    state.negativeSearch = e.target.checked;
     renderFileList();
     renderStats();
   });
