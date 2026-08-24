@@ -18,6 +18,13 @@ export function parseDownloadUrl(value) {
   return parsed;
 }
 
+export function parseEncodedDownloadUrl(value) {
+  if (typeof value !== 'string' || !value) throw new Error('source param required');
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+  return parseDownloadUrl(Buffer.from(padded, 'base64').toString('utf8'));
+}
+
 export function sanitizeDownloadFilename(value, fallback = 'download') {
   const sanitized = String(value || '')
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
@@ -93,10 +100,12 @@ export function createDownloadsRouter() {
   });
 
   // Remux HLS into a fragmented MP4 stream. No temporary file is written to disk.
-  router.get('/download-m3u8', (req, res) => {
+  const downloadVideo = (req, res) => {
     let targetUrl;
     try {
-      targetUrl = parseDownloadUrl(req.query.url);
+      targetUrl = req.query.source
+        ? parseEncodedDownloadUrl(req.query.source)
+        : parseDownloadUrl(req.query.url);
     } catch (err) {
       return res.status(400).json({ error: err.message });
     }
@@ -160,7 +169,11 @@ export function createDownloadsRouter() {
         if (ffmpeg.exitCode === null && !ffmpeg.killed) ffmpeg.kill();
       }
     });
-  });
+  };
+
+  router.get('/download-video', downloadVideo);
+  // Backward-compatible alias for existing bookmarks and callers.
+  router.get('/download-m3u8', downloadVideo);
 
   return router;
 }

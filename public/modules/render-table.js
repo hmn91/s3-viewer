@@ -61,12 +61,26 @@ function actionUrl(path, file, filename = file.displayName) {
   return `${path}?${params}`;
 }
 
+function base64UrlEncode(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function videoActionUrl(file, filename) {
+  const params = new URLSearchParams({ source: base64UrlEncode(file.url), filename });
+  return `/api/download-video?${params}`;
+}
+
 function buildFileActions(file) {
   const key = escHtml(file.key);
   const originalFilename = isMp4File(file) ? mp4DownloadFilename(file) : file.displayName;
   const downloadUrl = escHtml(actionUrl('/api/download', file, originalFilename));
+  const escapedOriginalFilename = escHtml(originalFilename);
+  const mp4Filename = mp4DownloadFilename(file);
   const mp4Action = isM3u8File(file)
-    ? `<a class="btn-file-action btn-download-mp4" href="${escHtml(actionUrl('/api/download-m3u8', file, mp4DownloadFilename(file)))}" title="Download as MP4" aria-label="Download as MP4">MP4</a>`
+    ? `<a class="btn-file-action btn-download-mp4" href="${escHtml(videoActionUrl(file, mp4Filename))}" download="${escHtml(mp4Filename)}" title="Download as MP4" aria-label="Download as MP4">MP4</a>`
     : '';
   const visibilityAction = file.isHidden
     ? `<button class="btn-file-action btn-unhide-file" data-file-key="${key}" title="Unhide file" aria-label="Unhide file">${SVG_EYE_OPEN}</button>`
@@ -75,7 +89,7 @@ function buildFileActions(file) {
   return `
     <div class="file-actions">
       <button class="btn-file-action btn-copy-url" data-file-key="${key}" title="Copy URL" aria-label="Copy URL">⧉</button>
-      <a class="btn-file-action" href="${downloadUrl}" title="Download original file" aria-label="Download original file">↓</a>
+      <a class="btn-file-action" href="${downloadUrl}" download="${escapedOriginalFilename}" title="Download original file" aria-label="Download original file">↓</a>
       ${mp4Action}
       ${visibilityAction}
     </div>

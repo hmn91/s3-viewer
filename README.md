@@ -79,7 +79,7 @@ s3-viewer/
 | GET | `/api/files?project_id=N&page=1&limit=50&show_hidden=false` | Paginated files (limits: 20, 50, 100) with filter metadata |
 | POST | `/api/seen` | Persist fetched files in bounded batches |
 | GET | `/api/download?url=&filename=` | Download an original remote file |
-| GET | `/api/download-m3u8?url=&filename=` | Remux an M3U8 stream to MP4 with FFmpeg |
+| GET | `/api/download-video?source=&filename=` | Remux an M3U8 stream to MP4 with FFmpeg |
 | PUT | `/api/files/:key/comment` | Save comment |
 | POST/DELETE | `/api/files/:key/hide` | Hide / unhide file |
 | POST | `/api/hidden/batch` | Hide many files in one transaction |
@@ -87,6 +87,9 @@ s3-viewer/
 | GET/POST/PUT/DELETE | `/api/tags` | Tag management |
 | POST/DELETE | `/api/files/:key/tags` | Assign / remove tag from file |
 | GET | `/api/fetch?url=` | CORS proxy for S3 XML |
+
+`source` is the Base64URL-encoded HLS URL. `/api/download-m3u8?url=&filename=` remains available as a
+backward-compatible alias for the video download endpoint.
 
 `GET /api/files` always requires `project_id`, defaults to `page=1&limit=50&show_hidden=false`,
 and accepts only `20`, `50`, or `100` for `limit`. Its response contains `items`, pagination
