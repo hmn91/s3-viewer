@@ -24,6 +24,7 @@ import {
 } from './modules/blacklist-modal.js';
 import { updateHiddenButton } from './modules/hidden-ui.js';
 import { loadFilePage, renderFilePagination } from './modules/file-page.js';
+import { bindVideoDownloads } from './modules/video-download.js';
 
 // =====================================================================
 // PROJECT NAVIGATION
@@ -434,6 +435,7 @@ function bindFileViewerEvents() {
 async function init() {
   // Wire file viewer events (always bound, just hidden until project selected)
   bindFileViewerEvents();
+  bindVideoDownloads();
 
   // Wire project list: project selection handler + search
   setProjectSelectHandler(enterProject);

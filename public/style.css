@@ -770,7 +770,68 @@ main {
 }
 .btn-file-action:hover { opacity: 1; color: var(--primary); background: var(--bg); }
 .btn-download-mp4 { min-width: 32px; font-size: 10px; font-weight: 700; }
+.btn-download-mp4.is-processing { pointer-events: none; opacity: 0.35; }
 .btn-file-action-success { color: #15803d; opacity: 1; }
+
+/* ===== VIDEO DOWNLOAD PROGRESS ===== */
+.download-progress-list {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 1200;
+  display: flex;
+  width: min(380px, calc(100vw - 36px));
+  flex-direction: column;
+  gap: 8px;
+}
+.download-progress-card {
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eef6ff;
+  color: #1e3a5f;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  font-size: 12px;
+}
+.download-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.download-progress-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.download-progress-percent { flex: none; font-variant-numeric: tabular-nums; }
+.download-progress-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dbeafe;
+}
+.download-progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 0.25s ease;
+}
+.download-progress-card.indeterminate .download-progress-fill {
+  width: 35%;
+  animation: download-progress-indeterminate 1.2s ease-in-out infinite alternate;
+}
+.download-progress-detail { margin-top: 7px; color: inherit; opacity: 0.8; }
+.download-progress-card.complete { border-color: #86efac; background: #ecfdf3; color: #166534; }
+.download-progress-card.failed { border-color: var(--error-border); background: var(--error-bg); color: #991b1b; }
+.download-progress-card.complete .download-progress-fill { width: 100%; background: #16a34a; }
+@keyframes download-progress-indeterminate {
+  from { transform: translateX(-20%); }
+  to { transform: translateX(205%); }
+}
 
 /* ===== FILE ROW HIGHLIGHT (global search navigation) ===== */
 @keyframes highlight-fade {

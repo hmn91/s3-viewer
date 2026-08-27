@@ -1,6 +1,10 @@
 // File download routes: stream original URLs or remux HLS (.m3u8) streams to MP4.
 
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { Router } from 'express';
@@ -8,6 +12,8 @@ import { Router } from 'express';
 const MAX_FILENAME_LENGTH = 180;
 const MAX_FFMPEG_ERROR_LENGTH = 16_000;
 const REMOTE_HEADER_TIMEOUT_MS = 30_000;
+const DOWNLOAD_JOB_TTL_MS = 10 * 60_000;
+const FAILED_JOB_TTL_MS = 60_000;
 
 export function parseDownloadUrl(value) {
   if (typeof value !== 'string' || !value) throw new Error('url param required');
@@ -59,8 +65,167 @@ function sendRouteError(res, status, message) {
   else if (!res.destroyed) res.destroy();
 }
 
+function durationFromFfmpegOutput(output) {
+  const match = output.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
+function publicJobStatus(job) {
+  return {
+    id: job.id,
+    status: job.status,
+    filename: job.filename,
+    durationSeconds: job.durationSeconds,
+    processedSeconds: job.processedSeconds,
+    percent: job.status === 'complete' ? 100 : job.percent,
+    speed: job.speed,
+    error: job.error,
+    downloadUrl: job.status === 'complete'
+      ? `/api/download-video-jobs/${job.id}/file`
+      : null,
+  };
+}
+
 export function createDownloadsRouter() {
   const router = Router();
+  const videoJobs = new Map();
+
+  async function removeVideoJob(job) {
+    if (job.cleanupTimer) clearTimeout(job.cleanupTimer);
+    if (job.ffmpeg?.exitCode === null && !job.ffmpeg.killed) job.ffmpeg.kill();
+    videoJobs.delete(job.id);
+    await rm(job.outputPath, { force: true }).catch(() => {});
+  }
+
+  function scheduleJobCleanup(job, delay) {
+    if (job.cleanupTimer) clearTimeout(job.cleanupTimer);
+    job.cleanupTimer = setTimeout(() => removeVideoJob(job), delay);
+    job.cleanupTimer.unref?.();
+  }
+
+  function startVideoJob(targetUrl, filename) {
+    const id = randomUUID();
+    const job = {
+      id,
+      filename,
+      outputPath: join(tmpdir(), `s3-viewer-${id}.mp4`),
+      status: 'processing',
+      durationSeconds: null,
+      processedSeconds: 0,
+      percent: null,
+      speed: null,
+      error: null,
+      ffmpegError: '',
+      progressBuffer: '',
+      ffmpeg: null,
+      cleanupTimer: null,
+      resolveCompletion: null,
+    };
+    job.completion = new Promise(resolve => {
+      job.resolveCompletion = resolve;
+    });
+    videoJobs.set(id, job);
+
+    const args = [
+      '-y',
+      '-nostdin',
+      '-hide_banner',
+      '-loglevel', 'info',
+      '-stats_period', '0.5',
+      '-i', targetUrl.toString(),
+      '-map', '0:v:0?',
+      '-map', '0:a:0?',
+      '-c', 'copy',
+      '-bsf:a', 'aac_adtstoasc',
+      '-movflags', '+faststart',
+      '-progress', 'pipe:3',
+      job.outputPath,
+    ];
+
+    const ffmpeg = spawn('ffmpeg', args, {
+      windowsHide: true,
+      stdio: ['ignore', 'ignore', 'pipe', 'pipe'],
+    });
+    job.ffmpeg = ffmpeg;
+    let spawnFailed = false;
+
+    ffmpeg.stderr.on('data', chunk => {
+      if (job.ffmpegError.length < MAX_FFMPEG_ERROR_LENGTH) {
+        job.ffmpegError += chunk.toString();
+      }
+      if (job.durationSeconds === null) {
+        job.durationSeconds = durationFromFfmpegOutput(job.ffmpegError);
+      }
+    });
+
+    ffmpeg.stdio[3].on('data', chunk => {
+      job.progressBuffer += chunk.toString();
+      const lines = job.progressBuffer.split(/\r?\n/);
+      job.progressBuffer = lines.pop() || '';
+      for (const line of lines) {
+        const separator = line.indexOf('=');
+        if (separator < 0) continue;
+        const key = line.slice(0, separator);
+        const value = line.slice(separator + 1);
+        if (key === 'out_time_us') {
+          job.processedSeconds = Math.max(0, Number(value) / 1_000_000 || 0);
+          if (job.durationSeconds) {
+            job.percent = Math.min(99, Math.max(0,
+              Math.round(job.processedSeconds / job.durationSeconds * 100)));
+          }
+        } else if (key === 'speed') {
+          job.speed = value === 'N/A' ? null : value;
+        }
+      }
+    });
+
+    ffmpeg.once('error', err => {
+      spawnFailed = true;
+      job.status = 'failed';
+      job.error = err.code === 'ENOENT'
+        ? 'FFmpeg is not installed or is not available in PATH'
+        : `Could not start FFmpeg: ${err.message}`;
+      job.resolveCompletion();
+      scheduleJobCleanup(job, FAILED_JOB_TTL_MS);
+    });
+
+    ffmpeg.once('close', code => {
+      if (spawnFailed) return;
+      if (code === 0) {
+        job.status = 'complete';
+        job.percent = 100;
+        scheduleJobCleanup(job, DOWNLOAD_JOB_TTL_MS);
+      } else {
+        job.status = 'failed';
+        const detail = job.ffmpegError.trim().slice(-MAX_FFMPEG_ERROR_LENGTH)
+          || `FFmpeg exited with code ${code}`;
+        job.error = `M3U8 conversion failed: ${detail}`;
+        console.error(`M3U8 download failed: ${detail}`);
+        scheduleJobCleanup(job, FAILED_JOB_TTL_MS);
+      }
+      job.resolveCompletion();
+    });
+
+    return job;
+  }
+
+  function videoRequestDetails(req) {
+    const targetUrl = req.query.source
+      ? parseEncodedDownloadUrl(req.query.source)
+      : parseDownloadUrl(req.query.url);
+    return {
+      targetUrl,
+      outputName: mp4Filename(requestedFilename(req, targetUrl)),
+    };
+  }
+
+  function sendCompletedJob(job, res) {
+    res.download(job.outputPath, job.filename, err => {
+      removeVideoJob(job);
+      if (err && !res.headersSent) sendRouteError(res, 500, err.message);
+    });
+  }
 
   // Stream a remote file through the server so cross-origin URLs download reliably.
   router.get('/download', async (req, res) => {
@@ -99,76 +264,60 @@ export function createDownloadsRouter() {
     }
   });
 
-  // Remux HLS into a fragmented MP4 stream. No temporary file is written to disk.
-  const downloadVideo = (req, res) => {
-    let targetUrl;
+  // Start a background remux job. The UI polls its progress, then downloads the
+  // regular (non-fragmented) MP4 when it is complete.
+  router.post('/download-video-jobs', (req, res) => {
+    let details;
     try {
-      targetUrl = req.query.source
-        ? parseEncodedDownloadUrl(req.query.source)
-        : parseDownloadUrl(req.query.url);
+      details = videoRequestDetails(req);
     } catch (err) {
       return res.status(400).json({ error: err.message });
     }
 
-    const outputName = mp4Filename(requestedFilename(req, targetUrl));
-    const args = [
-      '-nostdin',
-      '-hide_banner',
-      '-loglevel', 'error',
-      '-i', targetUrl.toString(),
-      '-map', '0:v:0?',
-      '-map', '0:a:0?',
-      '-c', 'copy',
-      '-bsf:a', 'aac_adtstoasc',
-      '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
-      '-f', 'mp4',
-      'pipe:1',
-    ];
+    const job = startVideoJob(details.targetUrl, details.outputName);
+    res.status(202).json(publicJobStatus(job));
+  });
 
-    const ffmpeg = spawn('ffmpeg', args, {
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let ffmpegError = '';
-    let spawnFailed = false;
+  router.get('/download-video-jobs/:id', (req, res) => {
+    const job = videoJobs.get(req.params.id);
+    if (!job) return res.status(404).json({ error: 'Download job not found or expired' });
+    res.json(publicJobStatus(job));
+  });
+
+  router.get('/download-video-jobs/:id/file', (req, res) => {
+    const job = videoJobs.get(req.params.id);
+    if (!job) return res.status(404).json({ error: 'Download job not found or expired' });
+    if (job.status !== 'complete') {
+      return res.status(409).json({ error: 'Video is not ready for download' });
+    }
+    sendCompletedJob(job, res);
+  });
+
+  // Direct endpoint kept for bookmarks and callers without JavaScript. It waits
+  // for the regular MP4 to finish, then starts the response download.
+  const downloadVideo = async (req, res) => {
+    let details;
+    try {
+      details = videoRequestDetails(req);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    const job = startVideoJob(details.targetUrl, details.outputName);
     let clientDisconnected = false;
-
-    ffmpeg.stderr.on('data', chunk => {
-      if (ffmpegError.length < MAX_FFMPEG_ERROR_LENGTH) ffmpegError += chunk.toString();
-    });
-
-    ffmpeg.once('spawn', () => {
-      res.attachment(outputName);
-      res.type('video/mp4');
-      ffmpeg.stdout.pipe(res, { end: false });
-    });
-
-    ffmpeg.once('error', err => {
-      spawnFailed = true;
-      const message = err.code === 'ENOENT'
-        ? 'FFmpeg is not installed or is not available in PATH'
-        : `Could not start FFmpeg: ${err.message}`;
-      sendRouteError(res, 503, message);
-    });
-
-    ffmpeg.once('close', code => {
-      if (spawnFailed || clientDisconnected) return;
-      if (code === 0) {
-        if (!res.writableEnded) res.end();
-        return;
-      }
-
-      const detail = ffmpegError.trim().slice(0, MAX_FFMPEG_ERROR_LENGTH) || `FFmpeg exited with code ${code}`;
-      console.error(`M3U8 download failed: ${detail}`);
-      sendRouteError(res, 502, `M3U8 conversion failed: ${detail}`);
-    });
-
     res.on('close', () => {
       if (!res.writableEnded) {
         clientDisconnected = true;
-        if (ffmpeg.exitCode === null && !ffmpeg.killed) ffmpeg.kill();
+        removeVideoJob(job);
       }
     });
+
+    await job.completion;
+    if (clientDisconnected) return;
+    if (job.status === 'failed') {
+      return sendRouteError(res, 502, job.error);
+    }
+    sendCompletedJob(job, res);
   };
 
   router.get('/download-video', downloadVideo);

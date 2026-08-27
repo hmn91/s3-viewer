@@ -9,7 +9,7 @@ Localhost web app to browse, tag, and manage files from S3-compatible public buc
 - **Tagging** — create color-coded tags per project, assign to files
 - **Comments** — add inline notes to files
 - **Hide/unhide** — suppress files from the listing without deleting records
-- **File actions** — copy URLs, download original files, and remux `.m3u8` streams to `.mp4`
+- **File actions** — copy URLs, download original files, and remux `.m3u8` streams to compatible `.mp4` files with FFmpeg progress
 - **Global search** — search across projects, files, sources, and tags
 - **CORS proxy** — built-in proxy route to bypass browser CORS when fetching S3 XML
 - **Fetch progress & safe stopping** — live object/page counts, cancellable fetches, and a persisted confirmation for listings over 100 pages
@@ -79,7 +79,10 @@ s3-viewer/
 | GET | `/api/files?project_id=N&page=1&limit=50&show_hidden=false` | Paginated files (limits: 20, 50, 100) with filter metadata |
 | POST | `/api/seen` | Persist fetched files in bounded batches |
 | GET | `/api/download?url=&filename=` | Download an original remote file |
-| GET | `/api/download-video?source=&filename=` | Remux an M3U8 stream to MP4 with FFmpeg |
+| POST | `/api/download-video-jobs?source=&filename=` | Start an M3U8-to-MP4 remux job |
+| GET | `/api/download-video-jobs/:id` | Read FFmpeg progress for a remux job |
+| GET | `/api/download-video-jobs/:id/file` | Download a completed MP4 and remove its temporary file |
+| GET | `/api/download-video?source=&filename=` | Direct M3U8-to-MP4 download fallback (waits for remux first) |
 | PUT | `/api/files/:key/comment` | Save comment |
 | POST/DELETE | `/api/files/:key/hide` | Hide / unhide file |
 | POST | `/api/hidden/batch` | Hide many files in one transaction |

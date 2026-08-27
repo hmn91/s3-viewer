@@ -73,6 +73,11 @@ function videoActionUrl(file, filename) {
   return `/api/download-video?${params}`;
 }
 
+function videoPrepareUrl(file, filename) {
+  const params = new URLSearchParams({ source: base64UrlEncode(file.url), filename });
+  return `/api/download-video-jobs?${params}`;
+}
+
 function buildFileActions(file) {
   const key = escHtml(file.key);
   const originalFilename = isMp4File(file) ? mp4DownloadFilename(file) : file.displayName;
@@ -80,7 +85,7 @@ function buildFileActions(file) {
   const escapedOriginalFilename = escHtml(originalFilename);
   const mp4Filename = mp4DownloadFilename(file);
   const mp4Action = isM3u8File(file)
-    ? `<a class="btn-file-action btn-download-mp4" href="${escHtml(videoActionUrl(file, mp4Filename))}" download="${escHtml(mp4Filename)}" title="Download as MP4" aria-label="Download as MP4">MP4</a>`
+    ? `<a class="btn-file-action btn-download-mp4" href="${escHtml(videoActionUrl(file, mp4Filename))}" data-prepare-url="${escHtml(videoPrepareUrl(file, mp4Filename))}" data-download-filename="${escHtml(mp4Filename)}" download="${escHtml(mp4Filename)}" title="Download as MP4" aria-label="Download as MP4">MP4</a>`
     : '';
   const visibilityAction = file.isHidden
     ? `<button class="btn-file-action btn-unhide-file" data-file-key="${key}" title="Unhide file" aria-label="Unhide file">${SVG_EYE_OPEN}</button>`
